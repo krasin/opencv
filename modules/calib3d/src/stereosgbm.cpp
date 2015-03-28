@@ -247,22 +247,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                                  Mat& disp1, const StereoSGBMParams& params,
                                  Mat& buffer )
 {
-#if CV_SSE2
-    static const uchar LSBTab[] =
-    {
-        0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-        5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0
-    };
-
-    volatile bool useSIMD = checkHardwareSupport(CV_CPU_SSE2);
-#endif
-
     const int ALIGN = 16;
     const int DISP_SHIFT = StereoMatcher::DISP_SHIFT;
     const int DISP_SCALE = (1 << DISP_SHIFT);
@@ -404,25 +388,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                                 const CostType* pixAdd = pixDiff + std::min(x + SW2*D, (width1-1)*D);
                                 const CostType* pixSub = pixDiff + std::max(x - (SW2+1)*D, 0);
 
-                            #if CV_SSE2
-                                if( useSIMD )
-                                {
-                                    for( d = 0; d < D; d += 8 )
-                                    {
-                                        __m128i hv = _mm_load_si128((const __m128i*)(hsumAdd + x - D + d));
-                                        __m128i Cx = _mm_load_si128((__m128i*)(Cprev + x + d));
-                                        hv = _mm_adds_epi16(_mm_subs_epi16(hv,
-                                                                           _mm_load_si128((const __m128i*)(pixSub + d))),
-                                                            _mm_load_si128((const __m128i*)(pixAdd + d)));
-                                        Cx = _mm_adds_epi16(_mm_subs_epi16(Cx,
-                                                                           _mm_load_si128((const __m128i*)(hsumSub + x + d))),
-                                                            hv);
-                                        _mm_store_si128((__m128i*)(hsumAdd + x + d), hv);
-                                        _mm_store_si128((__m128i*)(C + x + d), Cx);
-                                    }
-                                }
-                                else
-                            #endif
                                 {
                                     for( d = 0; d < D; d++ )
                                     {
@@ -501,76 +466,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                 const CostType* Cp = C + x*D;
                 CostType* Sp = S + x*D;
 
-            #if CV_SSE2
-                if( useSIMD )
-                {
-                    __m128i _P1 = _mm_set1_epi16((short)P1);
-
-                    __m128i _delta0 = _mm_set1_epi16((short)delta0);
-                    __m128i _delta1 = _mm_set1_epi16((short)delta1);
-                    __m128i _delta2 = _mm_set1_epi16((short)delta2);
-                    __m128i _delta3 = _mm_set1_epi16((short)delta3);
-                    __m128i _minL0 = _mm_set1_epi16((short)MAX_COST);
-
-                    for( d = 0; d < D; d += 8 )
-                    {
-                        __m128i Cpd = _mm_load_si128((const __m128i*)(Cp + d));
-                        __m128i L0, L1, L2, L3;
-
-                        L0 = _mm_load_si128((const __m128i*)(Lr_p0 + d));
-                        L1 = _mm_load_si128((const __m128i*)(Lr_p1 + d));
-                        L2 = _mm_load_si128((const __m128i*)(Lr_p2 + d));
-                        L3 = _mm_load_si128((const __m128i*)(Lr_p3 + d));
-
-                        L0 = _mm_min_epi16(L0, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p0 + d - 1)), _P1));
-                        L0 = _mm_min_epi16(L0, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p0 + d + 1)), _P1));
-
-                        L1 = _mm_min_epi16(L1, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p1 + d - 1)), _P1));
-                        L1 = _mm_min_epi16(L1, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p1 + d + 1)), _P1));
-
-                        L2 = _mm_min_epi16(L2, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p2 + d - 1)), _P1));
-                        L2 = _mm_min_epi16(L2, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p2 + d + 1)), _P1));
-
-                        L3 = _mm_min_epi16(L3, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p3 + d - 1)), _P1));
-                        L3 = _mm_min_epi16(L3, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p3 + d + 1)), _P1));
-
-                        L0 = _mm_min_epi16(L0, _delta0);
-                        L0 = _mm_adds_epi16(_mm_subs_epi16(L0, _delta0), Cpd);
-
-                        L1 = _mm_min_epi16(L1, _delta1);
-                        L1 = _mm_adds_epi16(_mm_subs_epi16(L1, _delta1), Cpd);
-
-                        L2 = _mm_min_epi16(L2, _delta2);
-                        L2 = _mm_adds_epi16(_mm_subs_epi16(L2, _delta2), Cpd);
-
-                        L3 = _mm_min_epi16(L3, _delta3);
-                        L3 = _mm_adds_epi16(_mm_subs_epi16(L3, _delta3), Cpd);
-
-                        _mm_store_si128( (__m128i*)(Lr_p + d), L0);
-                        _mm_store_si128( (__m128i*)(Lr_p + d + D2), L1);
-                        _mm_store_si128( (__m128i*)(Lr_p + d + D2*2), L2);
-                        _mm_store_si128( (__m128i*)(Lr_p + d + D2*3), L3);
-
-                        __m128i t0 = _mm_min_epi16(_mm_unpacklo_epi16(L0, L2), _mm_unpackhi_epi16(L0, L2));
-                        __m128i t1 = _mm_min_epi16(_mm_unpacklo_epi16(L1, L3), _mm_unpackhi_epi16(L1, L3));
-                        t0 = _mm_min_epi16(_mm_unpacklo_epi16(t0, t1), _mm_unpackhi_epi16(t0, t1));
-                        _minL0 = _mm_min_epi16(_minL0, t0);
-
-                        __m128i Sval = _mm_load_si128((const __m128i*)(Sp + d));
-
-                        L0 = _mm_adds_epi16(L0, L1);
-                        L2 = _mm_adds_epi16(L2, L3);
-                        Sval = _mm_adds_epi16(Sval, L0);
-                        Sval = _mm_adds_epi16(Sval, L2);
-
-                        _mm_store_si128((__m128i*)(Sp + d), Sval);
-                    }
-
-                    _minL0 = _mm_min_epi16(_minL0, _mm_srli_si128(_minL0, 8));
-                    _mm_storel_epi64((__m128i*)&minLr[0][xm], _minL0);
-                }
-                else
-            #endif
                 {
                     int minL0 = MAX_COST, minL1 = MAX_COST, minL2 = MAX_COST, minL3 = MAX_COST;
 
@@ -629,59 +524,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
 
                         const CostType* Cp = C + x*D;
 
-                    #if CV_SSE2
-                        if( useSIMD )
-                        {
-                            __m128i _P1 = _mm_set1_epi16((short)P1);
-                            __m128i _delta0 = _mm_set1_epi16((short)delta0);
-
-                            __m128i _minL0 = _mm_set1_epi16((short)minL0);
-                            __m128i _minS = _mm_set1_epi16(MAX_COST), _bestDisp = _mm_set1_epi16(-1);
-                            __m128i _d8 = _mm_setr_epi16(0, 1, 2, 3, 4, 5, 6, 7), _8 = _mm_set1_epi16(8);
-
-                            for( d = 0; d < D; d += 8 )
-                            {
-                                __m128i Cpd = _mm_load_si128((const __m128i*)(Cp + d)), L0;
-
-                                L0 = _mm_load_si128((const __m128i*)(Lr_p0 + d));
-                                L0 = _mm_min_epi16(L0, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p0 + d - 1)), _P1));
-                                L0 = _mm_min_epi16(L0, _mm_adds_epi16(_mm_loadu_si128((const __m128i*)(Lr_p0 + d + 1)), _P1));
-                                L0 = _mm_min_epi16(L0, _delta0);
-                                L0 = _mm_adds_epi16(_mm_subs_epi16(L0, _delta0), Cpd);
-
-                                _mm_store_si128((__m128i*)(Lr_p + d), L0);
-                                _minL0 = _mm_min_epi16(_minL0, L0);
-                                L0 = _mm_adds_epi16(L0, *(__m128i*)(Sp + d));
-                                _mm_store_si128((__m128i*)(Sp + d), L0);
-
-                                __m128i mask = _mm_cmpgt_epi16(_minS, L0);
-                                _minS = _mm_min_epi16(_minS, L0);
-                                _bestDisp = _mm_xor_si128(_bestDisp, _mm_and_si128(_mm_xor_si128(_bestDisp,_d8), mask));
-                                _d8 = _mm_adds_epi16(_d8, _8);
-                            }
-
-                            short CV_DECL_ALIGNED(16) bestDispBuf[8];
-                            _mm_store_si128((__m128i*)bestDispBuf, _bestDisp);
-
-                            _minL0 = _mm_min_epi16(_minL0, _mm_srli_si128(_minL0, 8));
-                            _minL0 = _mm_min_epi16(_minL0, _mm_srli_si128(_minL0, 4));
-                            _minL0 = _mm_min_epi16(_minL0, _mm_srli_si128(_minL0, 2));
-
-                            __m128i qS = _mm_min_epi16(_minS, _mm_srli_si128(_minS, 8));
-                            qS = _mm_min_epi16(qS, _mm_srli_si128(qS, 4));
-                            qS = _mm_min_epi16(qS, _mm_srli_si128(qS, 2));
-
-                            minLr[0][xm] = (CostType)_mm_cvtsi128_si32(_minL0);
-                            minS = (CostType)_mm_cvtsi128_si32(qS);
-
-                            qS = _mm_shuffle_epi32(_mm_unpacklo_epi16(qS, qS), 0);
-                            qS = _mm_cmpeq_epi16(_minS, qS);
-                            int idx = _mm_movemask_epi8(_mm_packs_epi16(qS, qS)) & 255;
-
-                            bestDisp = bestDispBuf[LSBTab[idx]];
-                        }
-                        else
-                    #endif
                         {
                             for( d = 0; d < D; d++ )
                             {
