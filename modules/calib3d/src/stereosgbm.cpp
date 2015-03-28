@@ -219,6 +219,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   const int DISP_SHIFT = StereoMatcher::DISP_SHIFT;
   const int DISP_SCALE = (1 << DISP_SHIFT);
   const CostType MAX_COST = SHRT_MAX;
+  printf("ALIGN: %d, DISP_SHIFT: %d, DISP_SCALE: %d, MAX_COST: %d\n", ALIGN, DISP_SHIFT, DISP_SCALE, (int) MAX_COST);
 
   int minD = params.minDisparity, maxD = minD + params.numDisparities;
   Size SADWindowSize;
@@ -227,7 +228,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int uniquenessRatio = params.uniquenessRatio >= 0 ? params.uniquenessRatio : 10;
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
-  int k, width = disp1.cols, height = disp1.rows;
+  int width = disp1.cols, height = disp1.rows;
   int minX1 = std::max(-maxD, 0), maxX1 = width + std::min(minD, 0);
   int D = maxD - minD, width1 = maxX1 - minX1;
   int INVALID_DISP = minD - 1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
@@ -235,8 +236,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   const int TAB_OFS = 256 * 4, TAB_SIZE = 256 + TAB_OFS * 2;
   PixType clipTab[TAB_SIZE];
 
-  for (k = 0; k < TAB_SIZE; k++)
+  for (int k = 0; k < TAB_SIZE; k++) {
     clipTab[k] = (PixType)(std::min(std::max(k - TAB_OFS, -ftzero), ftzero) + ftzero);
+  }
 
   if (minX1 >= maxX1) {
     disp1 = Scalar::all(INVALID_DISP_SCALED);
@@ -283,7 +285,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   PixType* tempBuf = (PixType*)(disp2ptr + width);
 
   // add P2 to every C(x,y). it saves a few operations in the inner loops
-  for (k = 0; k < width1 * D; k++) Cbuf[k] = (CostType)P2;
+  for (int k = 0; k < width1 * D; k++) {
+    Cbuf[k] = (CostType)P2;
+  }
 
   {
     int x1, y1, x2, y2, dx, dy;
@@ -297,7 +301,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
 
     CostType* Lr[NLR] = {0}, * minLr[NLR] = {0};
 
-    for (k = 0; k < NLR; k++) {
+    for (int k = 0; k < NLR; k++) {
       // shift Lr[k] and minLr[k] pointers, because we allocated them with the borders,
       // and will occasionally use negative indices with the arrays
       // we need to shift Lr[k] pointers by 1, to give the space for d=-1.
@@ -318,7 +322,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       {
         int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
 
-        for (k = dy1; k <= dy2; k++) {
+        for (int k = dy1; k <= dy2; k++) {
           CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
 
           if (k < height) {
@@ -365,7 +369,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
         }
 
         // also, clear the S buffer
-        for (k = 0; k < width1 * D; k++) S[k] = 0;
+        for (int k = 0; k < width1 * D; k++) S[k] = 0;
       }
 
       // clear the left and the right borders

@@ -230,6 +230,7 @@ int main(int argc, char** argv)
     }
 
     numberOfDisparities = numberOfDisparities > 0 ? numberOfDisparities : ((img_size.width/8) + 15) & -16;
+    printf("numberOfDisparities: %d\n", numberOfDisparities);
 
     bm->setROI1(roi1);
     bm->setROI2(roi2);
