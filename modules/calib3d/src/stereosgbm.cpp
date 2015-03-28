@@ -180,11 +180,6 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
     buffer -= minX2;
     cost -= minX1*D + minD; // simplify the cost indices inside the loop
 
-#if CV_SSE2
-    volatile bool useSIMD = checkHardwareSupport(CV_CPU_SSE2);
-#endif
-
-#if 1
     for( c = 0; c < cn*2; c++, prow1 += width, prow2 += width )
     {
         int diff_scale = c < cn ? 0 : 2;
@@ -211,31 +206,6 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
             int u0 = std::min(ul, ur); u0 = std::min(u0, u);
             int u1 = std::max(ul, ur); u1 = std::max(u1, u);
 
-        #if CV_SSE2
-            if( useSIMD )
-            {
-                __m128i _u = _mm_set1_epi8((char)u), _u0 = _mm_set1_epi8((char)u0);
-                __m128i _u1 = _mm_set1_epi8((char)u1), z = _mm_setzero_si128();
-                __m128i ds = _mm_cvtsi32_si128(diff_scale);
-
-                for( int d = minD; d < maxD; d += 16 )
-                {
-                    __m128i _v = _mm_loadu_si128((const __m128i*)(prow2 + width-x-1 + d));
-                    __m128i _v0 = _mm_loadu_si128((const __m128i*)(buffer + width-x-1 + d));
-                    __m128i _v1 = _mm_loadu_si128((const __m128i*)(buffer + width-x-1 + d + width2));
-                    __m128i c0 = _mm_max_epu8(_mm_subs_epu8(_u, _v1), _mm_subs_epu8(_v0, _u));
-                    __m128i c1 = _mm_max_epu8(_mm_subs_epu8(_v, _u1), _mm_subs_epu8(_u0, _v));
-                    __m128i diff = _mm_min_epu8(c0, c1);
-
-                    c0 = _mm_load_si128((__m128i*)(cost + x*D + d));
-                    c1 = _mm_load_si128((__m128i*)(cost + x*D + d + 8));
-
-                    _mm_store_si128((__m128i*)(cost + x*D + d), _mm_adds_epi16(c0, _mm_srl_epi16(_mm_unpacklo_epi8(diff,z), ds)));
-                    _mm_store_si128((__m128i*)(cost + x*D + d + 8), _mm_adds_epi16(c1, _mm_srl_epi16(_mm_unpackhi_epi8(diff,z), ds)));
-                }
-            }
-            else
-        #endif
             {
                 for( int d = minD; d < maxD; d++ )
                 {
@@ -250,40 +220,6 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
             }
         }
     }
-#else
-    for( c = 0; c < cn*2; c++, prow1 += width, prow2 += width )
-    {
-        for( x = minX1; x < maxX1; x++ )
-        {
-            int u = prow1[x];
-        #if CV_SSE2
-            if( useSIMD )
-            {
-                __m128i _u = _mm_set1_epi8(u), z = _mm_setzero_si128();
-
-                for( int d = minD; d < maxD; d += 16 )
-                {
-                    __m128i _v = _mm_loadu_si128((const __m128i*)(prow2 + width-1-x + d));
-                    __m128i diff = _mm_adds_epu8(_mm_subs_epu8(_u,_v), _mm_subs_epu8(_v,_u));
-                    __m128i c0 = _mm_load_si128((__m128i*)(cost + x*D + d));
-                    __m128i c1 = _mm_load_si128((__m128i*)(cost + x*D + d + 8));
-
-                    _mm_store_si128((__m128i*)(cost + x*D + d), _mm_adds_epi16(c0, _mm_unpacklo_epi8(diff,z)));
-                    _mm_store_si128((__m128i*)(cost + x*D + d + 8), _mm_adds_epi16(c1, _mm_unpackhi_epi8(diff,z)));
-                }
-            }
-            else
-        #endif
-            {
-                for( int d = minD; d < maxD; d++ )
-                {
-                    int v = prow2[width-1-x + d];
-                    cost[x*D + d] = (CostType)(cost[x*D + d] + (CostType)std::abs(u - v));
-                }
-            }
-        }
-    }
-#endif
 }
 
 
