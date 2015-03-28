@@ -124,16 +124,16 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
                             PixType* buffer, const PixType* tab,
                             int tabOfs, int )
 {
-    int x, c, width = img1.cols, cn = img1.channels();
+  int x, c, width = img1.cols;
     int minX1 = std::max(-maxD, 0), maxX1 = width + std::min(minD, 0);
     int minX2 = std::max(minX1 - maxD, 0), maxX2 = std::min(maxX1 - minD, width);
     int D = maxD - minD, width1 = maxX1 - minX1, width2 = maxX2 - minX2;
     const PixType *row1 = img1.ptr<PixType>(y), *row2 = img2.ptr<PixType>(y);
-    PixType *prow1 = buffer + width2*2, *prow2 = prow1 + width*cn*2;
+    PixType *prow1 = buffer + width2*2, *prow2 = prow1 + width*2;
 
     tab += tabOfs;
 
-    for( c = 0; c < cn*2; c++ )
+    for( c = 0; c < 2; c++ )
     {
         prow1[width*c] = prow1[width*c + width-1] =
         prow2[width*c] = prow2[width*c + width-1] = tab[0];
@@ -142,8 +142,6 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
     int n1 = y > 0 ? -(int)img1.step : 0, s1 = y < img1.rows-1 ? (int)img1.step : 0;
     int n2 = y > 0 ? -(int)img2.step : 0, s2 = y < img2.rows-1 ? (int)img2.step : 0;
 
-    if( cn == 1 )
-    {
         for( x = 1; x < width-1; x++ )
         {
             prow1[x] = tab[(row1[x+1] - row1[x-1])*2 + row1[x+n1+1] - row1[x+n1-1] + row1[x+s1+1] - row1[x+s1-1]];
@@ -152,37 +150,15 @@ static void calcPixelCostBT( const Mat& img1, const Mat& img2, int y,
             prow1[x+width] = row1[x];
             prow2[width-1-x+width] = row2[x];
         }
-    }
-    else
-    {
-        for( x = 1; x < width-1; x++ )
-        {
-            prow1[x] = tab[(row1[x*3+3] - row1[x*3-3])*2 + row1[x*3+n1+3] - row1[x*3+n1-3] + row1[x*3+s1+3] - row1[x*3+s1-3]];
-            prow1[x+width] = tab[(row1[x*3+4] - row1[x*3-2])*2 + row1[x*3+n1+4] - row1[x*3+n1-2] + row1[x*3+s1+4] - row1[x*3+s1-2]];
-            prow1[x+width*2] = tab[(row1[x*3+5] - row1[x*3-1])*2 + row1[x*3+n1+5] - row1[x*3+n1-1] + row1[x*3+s1+5] - row1[x*3+s1-1]];
-
-            prow2[width-1-x] = tab[(row2[x*3+3] - row2[x*3-3])*2 + row2[x*3+n2+3] - row2[x*3+n2-3] + row2[x*3+s2+3] - row2[x*3+s2-3]];
-            prow2[width-1-x+width] = tab[(row2[x*3+4] - row2[x*3-2])*2 + row2[x*3+n2+4] - row2[x*3+n2-2] + row2[x*3+s2+4] - row2[x*3+s2-2]];
-            prow2[width-1-x+width*2] = tab[(row2[x*3+5] - row2[x*3-1])*2 + row2[x*3+n2+5] - row2[x*3+n2-1] + row2[x*3+s2+5] - row2[x*3+s2-1]];
-
-            prow1[x+width*3] = row1[x*3];
-            prow1[x+width*4] = row1[x*3+1];
-            prow1[x+width*5] = row1[x*3+2];
-
-            prow2[width-1-x+width*3] = row2[x*3];
-            prow2[width-1-x+width*4] = row2[x*3+1];
-            prow2[width-1-x+width*5] = row2[x*3+2];
-        }
-    }
 
     memset( cost, 0, width1*D*sizeof(cost[0]) );
 
     buffer -= minX2;
     cost -= minX1*D + minD; // simplify the cost indices inside the loop
 
-    for( c = 0; c < cn*2; c++, prow1 += width, prow2 += width )
+    for( c = 0; c < 2; c++, prow1 += width, prow2 += width )
     {
-        int diff_scale = c < cn ? 0 : 2;
+        int diff_scale = c < 1 ? 0 : 2;
 
         // precompute
         //   v0 = min(row2[x-1/2], row2[x], row2[x+1/2]) and
@@ -247,6 +223,7 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                                  Mat& disp1, const StereoSGBMParams& params,
                                  Mat& buffer )
 {
+  CV_Assert(img1.channels() == 1);
     const int ALIGN = 16;
     const int DISP_SHIFT = StereoMatcher::DISP_SHIFT;
     const int DISP_SCALE = (1 << DISP_SHIFT);
@@ -298,7 +275,7 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
     size_t totalBufSize = (LrSize + minLrSize)*NLR*sizeof(CostType) + // minLr[] and Lr[]
     costBufSize*(hsumBufNRows + 1)*sizeof(CostType) + // hsumBuf, pixdiff
     CSBufSize*2*sizeof(CostType) + // C, S
-    width*16*img1.channels()*sizeof(PixType) + // temp buffer for computing per-pixel cost
+    width*16*sizeof(PixType) + // temp buffer for computing per-pixel cost
     width*(sizeof(CostType) + sizeof(DispType)) + 1024; // disp2cost + disp2
 
     if( buffer.empty() || !buffer.isContinuous() ||
