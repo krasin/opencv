@@ -264,8 +264,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
     int D = maxD - minD, width1 = maxX1 - minX1;
     int INVALID_DISP = minD - 1, INVALID_DISP_SCALED = INVALID_DISP*DISP_SCALE;
     int SW2 = SADWindowSize.width/2, SH2 = SADWindowSize.height/2;
-    bool fullDP = params.mode == StereoSGBM::MODE_HH;
-    int npasses = fullDP ? 2 : 1;
     const int TAB_OFS = 256*4, TAB_SIZE = 256 + TAB_OFS*2;
     PixType clipTab[TAB_SIZE];
 
@@ -294,7 +292,7 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
     // we keep pixel difference cost (C) and the summary cost over NR directions (S).
     // we also keep all the partial costs for the previous line L_r(x,d) and also min_k L_r(x, k)
     size_t costBufSize = width1*D;
-    size_t CSBufSize = costBufSize*(fullDP ? height : 1);
+    size_t CSBufSize = costBufSize;
     size_t minLrSize = (width1 + LrBorder*2)*NR2, LrSize = minLrSize*D2;
     int hsumBufNRows = SH2*2 + 2;
     size_t totalBufSize = (LrSize + minLrSize)*NLR*sizeof(CostType) + // minLr[] and Lr[]
@@ -321,20 +319,11 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
     for( k = 0; k < width1*D; k++ )
         Cbuf[k] = (CostType)P2;
 
-    for( int pass = 1; pass <= npasses; pass++ )
     {
         int x1, y1, x2, y2, dx, dy;
 
-        if( pass == 1 )
-        {
-            y1 = 0; y2 = height; dy = 1;
-            x1 = 0; x2 = width1; dx = 1;
-        }
-        else
-        {
-            y1 = height-1; y2 = -1; dy = -1;
-            x1 = width1-1; x2 = -1; dx = -1;
-        }
+	y1 = 0; y2 = height; dy = 1;
+	x1 = 0; x2 = width1; dx = 1;
 
         CostType *Lr[NLR]={0}, *minLr[NLR]={0};
 
@@ -355,10 +344,9 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
         {
             int x, d;
             DispType* disp1ptr = disp1.ptr<DispType>(y);
-            CostType* C = Cbuf + (!fullDP ? 0 : y*costBufSize);
-            CostType* S = Sbuf + (!fullDP ? 0 : y*costBufSize);
+            CostType* C = Cbuf;
+            CostType* S = Sbuf;
 
-            if( pass == 1 ) // compute C on the first pass, and reuse it on the second pass, if any.
             {
                 int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
 
@@ -381,7 +369,7 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                         if( y > 0 )
                         {
                             const CostType* hsumSub = hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows)*costBufSize;
-                            const CostType* Cprev = !fullDP || y == 0 ? C : C - costBufSize;
+                            const CostType* Cprev = C;
 
                             for( x = D; x < width1*D; x += D )
                             {
@@ -499,7 +487,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                 }
             }
 
-            if( pass == npasses )
             {
                 for( x = 0; x < width; x++ )
                 {
@@ -512,7 +499,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                     CostType* Sp = S + x*D;
                     int minS = MAX_COST, bestDisp = -1;
 
-                    if( npasses == 1 )
                     {
                         int xm = x*NR2, xd = xm*D2;
 
@@ -540,18 +526,6 @@ static void computeDisparitySGBM( const Mat& img1, const Mat& img2,
                                 }
                             }
                             minLr[0][xm] = (CostType)minL0;
-                        }
-                    }
-                    else
-                    {
-                        for( d = 0; d < D; d++ )
-                        {
-                            int Sval = Sp[d];
-                            if( Sval < minS )
-                            {
-                                minS = Sval;
-                                bestDisp = d;
-                            }
                         }
                     }
 
