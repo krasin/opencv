@@ -120,8 +120,8 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
   tab += tabOfs;
 
   for (int c = 0; c < 2; c++) {
-    prow1[width * c] = prow1[width * c + width - 1] = prow2[width * c] =
-        prow2[width * c + width - 1] = tab[0];
+    prow1[width * c] = prow1[width * c + width - 1] = tab[0];
+    prow2[width * c] = prow2[width * c + width - 1] = tab[0];
   }
 
   int n1 = y > 0 ? -(int)img1.step : 0, s1 = y < img1.rows - 1 ? (int)img1.step : 0;
