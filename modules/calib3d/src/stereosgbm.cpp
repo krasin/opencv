@@ -305,7 +305,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   }
 
   for (int y = 0; y != height; y++) {
-    int x, d;
+    int d;
     DispType* disp1ptr = disp1.ptr<DispType>(y);
     CostType* C = Cbuf;
     CostType* S = Sbuf;
@@ -320,7 +320,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
           calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
 
           memset(hsumAdd, 0, D * sizeof(CostType));
-          for (x = 0; x <= SW2 * D; x += D) {
+          for (int x = 0; x <= SW2 * D; x += D) {
             int scale = x == 0 ? SW2 + 1 : 1;
             for (d = 0; d < D; d++) hsumAdd[d] = (CostType)(hsumAdd[d] + pixDiff[x + d] * scale);
           }
@@ -330,7 +330,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
                 hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
             const CostType* Cprev = C;
 
-            for (x = D; x < width1 * D; x += D) {
+            for (int x = D; x < width1 * D; x += D) {
               const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
               const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
 
@@ -342,7 +342,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
               }
             }
           } else {
-            for (x = D; x < width1 * D; x += D) {
+            for (int x = D; x < width1 * D; x += D) {
               const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
               const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
 
@@ -354,7 +354,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
 
         if (y == 0) {
           int scale = k == 0 ? SH2 + 1 : 1;
-          for (x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+          for (int x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
         }
       }
 
@@ -386,7 +386,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
      6: r=(1, -dy*2)
      7: r=(2, -dy)
      */
-    for (x = 0; x != width1; x++) {
+    for (int x = 0; x != width1; x++) {
       int xm = x * NR2, xd = xm * D2;
 
       int delta0 = minLr[0][xm - NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
@@ -445,12 +445,12 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     }
 
     {
-      for (x = 0; x < width; x++) {
+      for (int x = 0; x < width; x++) {
         disp1ptr[x] = disp2ptr[x] = (DispType)INVALID_DISP_SCALED;
         disp2cost[x] = MAX_COST;
       }
 
-      for (x = width1 - 1; x >= 0; x--) {
+      for (int x = width1 - 1; x >= 0; x--) {
         CostType* Sp = S + x * D;
         int minS = MAX_COST, bestDisp = -1;
 
@@ -507,7 +507,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
         disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
       }
 
-      for (x = minX1; x < maxX1; x++) {
+      for (int x = minX1; x < maxX1; x++) {
         // we round the computed disparity both towards -inf and +inf and check
         // if either of the corresponding disparities in disp2 is consistent.
         // This is to give the computed disparity a chance to look valid if it is.
