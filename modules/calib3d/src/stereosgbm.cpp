@@ -290,11 +290,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     Cbuf[k] = (CostType)P2;
   }
 
-  int x1, y1, x2, y2, dx, dy;
+  int x1, x2, dx;
 
-  y1 = 0;
-  y2 = height;
-  dy = 1;
   x1 = 0;
   x2 = width1;
   dx = 1;
@@ -313,7 +310,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     memset(minLr[k] - LrBorder * NR2, 0, minLrSize * sizeof(CostType));
   }
 
-  for (int y = y1; y != y2; y += dy) {
+  for (int y = 0; y != height; y++) {
     int x, d;
     DispType* disp1ptr = disp1.ptr<DispType>(y);
     CostType* C = Cbuf;
