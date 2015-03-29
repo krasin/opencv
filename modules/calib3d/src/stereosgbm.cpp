@@ -440,78 +440,76 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       minLr[0][xm + 3] = (CostType)minL3;
     }
 
-    {
-      for (int x = 0; x < width; x++) {
-        disp1ptr[x] = disp2ptr[x] = (DispType)INVALID_DISP_SCALED;
-        disp2cost[x] = MAX_COST;
+    for (int x = 0; x < width; x++) {
+      disp1ptr[x] = disp2ptr[x] = (DispType)INVALID_DISP_SCALED;
+      disp2cost[x] = MAX_COST;
+    }
+
+    for (int x = width1 - 1; x >= 0; x--) {
+      CostType* Sp = S + x * D;
+      int minS = MAX_COST, bestDisp = -1;
+
+      int xm = x * NR2, xd = xm * D2;
+
+      int minL0 = MAX_COST;
+      int delta0 = minLr[0][xm + NR2] + P2;
+      CostType* Lr_p0 = Lr[0] + xd + NRD2;
+      Lr_p0[-1] = Lr_p0[D] = MAX_COST;
+      CostType* Lr_p = Lr[0] + xd;
+
+      const CostType* Cp = C + x * D;
+
+      for (d = 0; d < D; d++) {
+        int L0 = Cp[d] + std::min((int)Lr_p0[d], std::min(Lr_p0[d - 1] + P1,
+                                                          std::min(Lr_p0[d + 1] + P1, delta0))) -
+                 delta0;
+
+        Lr_p[d] = (CostType)L0;
+        minL0 = std::min(minL0, L0);
+
+        int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
+        if (Sval < minS) {
+          minS = Sval;
+          bestDisp = d;
+        }
+      }
+      minLr[0][xm] = (CostType)minL0;
+
+      for (d = 0; d < D; d++) {
+        if (Sp[d] * (100 - uniquenessRatio) < minS * 100 && std::abs(bestDisp - d) > 1) break;
+      }
+      if (d < D) continue;
+      d = bestDisp;
+      int _x2 = x + minX1 - d - minD;
+      if (disp2cost[_x2] > minS) {
+        disp2cost[_x2] = (CostType)minS;
+        disp2ptr[_x2] = (DispType)(d + minD);
       }
 
-      for (int x = width1 - 1; x >= 0; x--) {
-        CostType* Sp = S + x * D;
-        int minS = MAX_COST, bestDisp = -1;
+      if (0 < d && d < D - 1) {
+        // do subpixel quadratic interpolation:
+        //   fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
+        //   then find minimum of the parabola.
+        int denom2 = std::max(Sp[d - 1] + Sp[d + 1] - 2 * Sp[d], 1);
+        d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
+      } else
+        d *= DISP_SCALE;
+      disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
+    }
 
-        int xm = x * NR2, xd = xm * D2;
-
-        int minL0 = MAX_COST;
-        int delta0 = minLr[0][xm + NR2] + P2;
-        CostType* Lr_p0 = Lr[0] + xd + NRD2;
-        Lr_p0[-1] = Lr_p0[D] = MAX_COST;
-        CostType* Lr_p = Lr[0] + xd;
-
-        const CostType* Cp = C + x * D;
-
-        for (d = 0; d < D; d++) {
-          int L0 = Cp[d] + std::min((int)Lr_p0[d], std::min(Lr_p0[d - 1] + P1,
-                                                            std::min(Lr_p0[d + 1] + P1, delta0))) -
-                   delta0;
-
-          Lr_p[d] = (CostType)L0;
-          minL0 = std::min(minL0, L0);
-
-          int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
-          if (Sval < minS) {
-            minS = Sval;
-            bestDisp = d;
-          }
-        }
-        minLr[0][xm] = (CostType)minL0;
-
-        for (d = 0; d < D; d++) {
-          if (Sp[d] * (100 - uniquenessRatio) < minS * 100 && std::abs(bestDisp - d) > 1) break;
-        }
-        if (d < D) continue;
-        d = bestDisp;
-        int _x2 = x + minX1 - d - minD;
-        if (disp2cost[_x2] > minS) {
-          disp2cost[_x2] = (CostType)minS;
-          disp2ptr[_x2] = (DispType)(d + minD);
-        }
-
-        if (0 < d && d < D - 1) {
-          // do subpixel quadratic interpolation:
-          //   fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
-          //   then find minimum of the parabola.
-          int denom2 = std::max(Sp[d - 1] + Sp[d + 1] - 2 * Sp[d], 1);
-          d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
-        } else
-          d *= DISP_SCALE;
-        disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
-      }
-
-      for (int x = minX1; x < maxX1; x++) {
-        // we round the computed disparity both towards -inf and +inf and check
-        // if either of the corresponding disparities in disp2 is consistent.
-        // This is to give the computed disparity a chance to look valid if it is.
-        int d1 = disp1ptr[x];
-        if (d1 == INVALID_DISP_SCALED) continue;
-        int _d = d1 >> DISP_SHIFT;
-        int d_ = (d1 + DISP_SCALE - 1) >> DISP_SHIFT;
-        int _x = x - _d, x_ = x - d_;
-        if (0 <= _x && _x < width && disp2ptr[_x] >= minD &&
-            std::abs(disp2ptr[_x] - _d) > disp12MaxDiff && 0 <= x_ && x_ < width &&
-            disp2ptr[x_] >= minD && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
-          disp1ptr[x] = (DispType)INVALID_DISP_SCALED;
-      }
+    for (int x = minX1; x < maxX1; x++) {
+      // we round the computed disparity both towards -inf and +inf and check
+      // if either of the corresponding disparities in disp2 is consistent.
+      // This is to give the computed disparity a chance to look valid if it is.
+      int d1 = disp1ptr[x];
+      if (d1 == INVALID_DISP_SCALED) continue;
+      int _d = d1 >> DISP_SHIFT;
+      int d_ = (d1 + DISP_SCALE - 1) >> DISP_SHIFT;
+      int _x = x - _d, x_ = x - d_;
+      if (0 <= _x && _x < width && disp2ptr[_x] >= minD &&
+          std::abs(disp2ptr[_x] - _d) > disp12MaxDiff && 0 <= x_ && x_ < width &&
+          disp2ptr[x_] >= minD && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
+        disp1ptr[x] = (DispType)INVALID_DISP_SCALED;
     }
 
     // now shift the cyclic buffers
