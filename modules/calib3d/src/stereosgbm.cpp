@@ -166,18 +166,16 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
       int u1 = std::max(ul, ur);
       u1 = std::max(u1, u);
 
-      {
-        for (int d = 0; d < D; d++) {
-          int v = prow2[width - x - 1 + d];
-          int v0 = buffer[width - x - 1 + d];
-          int v1 = buffer[width - x - 1 + d + width];
-          int c0 = std::max(0, u - v1);
-          c0 = std::max(c0, v0 - u);
-          int c1 = std::max(0, v - u1);
-          c1 = std::max(c1, u0 - v);
+      for (int d = 0; d < D; d++) {
+        int v = prow2[width - x - 1 + d];
+        int v0 = buffer[width - x - 1 + d];
+        int v1 = buffer[width - x - 1 + d + width];
+        int c0 = std::max(0, u - v1);
+        c0 = std::max(c0, v0 - u);
+        int c1 = std::max(0, v - u1);
+        c1 = std::max(c1, u0 - v);
 
-          cost[x * D + d] = (CostType)(cost[x * D + d] + (std::min(c0, c1) >> diff_scale));
-        }
+        cost[x * D + d] = (CostType)(cost[x * D + d] + (std::min(c0, c1) >> diff_scale));
       }
     }
   }
