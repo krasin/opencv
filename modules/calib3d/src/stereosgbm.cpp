@@ -102,23 +102,21 @@ struct StereoSGBMParams {
 };
 
 /*
- For each pixel row1[x], 0 <= x < maxX <= width,
+ For each pixel row1[x], 0 <= x < width,
  and for each disparity 0<=d<maxD the function
- computes the cost (cost[x *maxD + d]), depending on the difference between
+ computes the cost (cost[x*maxD + d]), depending on the difference between
  row1[x] and row2[x-d]. The subpixel algorithm from
  "Depth Discontinuities by Pixel-to-Pixel Stereo" by Stan Birchfield and C. Tomasi
  is used, hence the suffix BT.
 
- the temporary buffer should contain width2*2 elements
+ the temporary buffer should contain width*2 elements
  */
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
-  int maxX1 = width;
-  int maxX2 = width;
-  int D = maxD, width1 = maxX1, width2 = maxX2;
+  int D = maxD;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
-  PixType* prow1 = buffer + width2 * 2, * prow2 = prow1 + width * 2;
+  PixType* prow1 = buffer + width * 2, * prow2 = prow1 + width * 2;
 
   tab += tabOfs;
 
@@ -140,7 +138,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
     prow2[width - 1 - x + width] = row2[x];
   }
 
-  memset(cost, 0, width1 * D * sizeof(cost[0]));
+  memset(cost, 0, width * D * sizeof(cost[0]));
 
   for (c = 0; c < 2; c++, prow1 += width, prow2 += width) {
     int diff_scale = c < 1 ? 0 : 2;
@@ -148,7 +146,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
     // precompute
     //   v0 = min(row2[x-1/2], row2[x], row2[x+1/2]) and
     //   v1 = max(row2[x-1/2], row2[x], row2[x+1/2]) and
-    for (x = 0; x < maxX2; x++) {
+    for (x = 0; x < width; x++) {
       int v = prow2[x];
       int vl = x > 0 ? (v + prow2[x - 1]) / 2 : v;
       int vr = x < width - 1 ? (v + prow2[x + 1]) / 2 : v;
@@ -157,10 +155,10 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
       int v1 = std::max(vl, vr);
       v1 = std::max(v1, v);
       buffer[x] = (PixType)v0;
-      buffer[x + width2] = (PixType)v1;
+      buffer[x + width] = (PixType)v1;
     }
 
-    for (x = 0; x < maxX1; x++) {
+    for (x = 0; x < width; x++) {
       int u = prow1[x];
       int ul = x > 0 ? (u + prow1[x - 1]) / 2 : u;
       int ur = x < width - 1 ? (u + prow1[x + 1]) / 2 : u;
@@ -173,7 +171,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
         for (int d = 0; d < maxD; d++) {
           int v = prow2[width - x - 1 + d];
           int v0 = buffer[width - x - 1 + d];
-          int v1 = buffer[width - x - 1 + d + width2];
+          int v1 = buffer[width - x - 1 + d + width];
           int c0 = std::max(0, u - v1);
           c0 = std::max(c0, v0 - u);
           int c1 = std::max(0, v - u1);
@@ -226,8 +224,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
   int width = disp1.cols, height = disp1.rows;
-  int maxX1 = width;
-  int D = maxD, width1 = maxX1;
+  int D = maxD;
   int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int SW2 = SADWindowSize.width / 2, SH2 = SADWindowSize.height / 2;
   const int TAB_OFS = 256 * 4, TAB_SIZE = 256 + TAB_OFS * 2;
@@ -235,11 +232,6 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
 
   for (int k = 0; k < TAB_SIZE; k++) {
     clipTab[k] = (PixType)(std::min(std::max(k - TAB_OFS, -ftzero), ftzero) + ftzero);
-  }
-
-  if (0 >= maxX1) {
-    disp1 = Scalar::all(INVALID_DISP_SCALED);
-    return;
   }
 
   CV_Assert(D % 16 == 0);
@@ -257,9 +249,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   // for each possible stereo match (img1(x,y) <=> img2(x-d,y))
   // we keep pixel difference cost (C) and the summary cost over NR directions (S).
   // we also keep all the partial costs for the previous line L_r(x,d) and also min_k L_r(x, k)
-  size_t costBufSize = width1 * D;
+  size_t costBufSize = width * D;
   size_t CSBufSize = costBufSize;
-  size_t minLrSize = (width1 + LrBorder * 2) * NR2, LrSize = minLrSize * D2;
+  size_t minLrSize = (width + LrBorder * 2) * NR2, LrSize = minLrSize * D2;
   int hsumBufNRows = SH2 * 2 + 2;
   size_t totalBufSize = (LrSize + minLrSize) * NLR * sizeof(CostType) +        // minLr[] and Lr[]
                         costBufSize * (hsumBufNRows + 1) * sizeof(CostType) +  // hsumBuf, pixdiff
@@ -282,7 +274,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   PixType* tempBuf = (PixType*)(disp2ptr + width);
 
   // add P2 to every C(x,y). it saves a few operations in the inner loops
-  for (int k = 0; k < width1 * D; k++) {
+  for (int k = 0; k < width * D; k++) {
     Cbuf[k] = (CostType)P2;
   }
 
@@ -325,8 +317,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
               hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
           const CostType* Cprev = C;
 
-          for (int x = D; x < width1 * D; x += D) {
-            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+          for (int x = D; x < width * D; x += D) {
+            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width - 1) * D);
             const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
 
             {
@@ -337,8 +329,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
             }
           }
         } else {
-          for (int x = D; x < width1 * D; x += D) {
-            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+          for (int x = D; x < width * D; x += D) {
+            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width - 1) * D);
             const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
 
             for (d = 0; d < D; d++)
@@ -349,18 +341,18 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
 
       if (y == 0) {
         int scale = k == 0 ? SH2 + 1 : 1;
-        for (int x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+        for (int x = 0; x < width * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
       }
     }
 
     // also, clear the S buffer
-    for (int k = 0; k < width1 * D; k++) S[k] = 0;
+    for (int k = 0; k < width * D; k++) S[k] = 0;
 
     // clear the left and the right borders
     memset(Lr[0] - NRD2 * LrBorder - 8, 0, NRD2 * LrBorder * sizeof(CostType));
-    memset(Lr[0] + width1 * NRD2 - 8, 0, NRD2 * LrBorder * sizeof(CostType));
+    memset(Lr[0] + width * NRD2 - 8, 0, NRD2 * LrBorder * sizeof(CostType));
     memset(minLr[0] - NR2 * LrBorder, 0, NR2 * LrBorder * sizeof(CostType));
-    memset(minLr[0] + width1 * NR2, 0, NR2 * LrBorder * sizeof(CostType));
+    memset(minLr[0] + width * NR2, 0, NR2 * LrBorder * sizeof(CostType));
 
     /*
      [formula 13 in the paper]
@@ -380,7 +372,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
      6: r=(1, -dy*2)
      7: r=(2, -dy)
      */
-    for (int x = 0; x != width1; x++) {
+    for (int x = 0; x != width; x++) {
       int xm = x * NR2, xd = xm * D2;
 
       int delta0 = minLr[0][xm - NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
@@ -441,7 +433,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       disp2cost[x] = MAX_COST;
     }
 
-    for (int x = width1 - 1; x >= 0; x--) {
+    for (int x = width - 1; x >= 0; x--) {
       CostType* Sp = S + x * D;
       int minS = MAX_COST, bestDisp = -1;
 
@@ -493,7 +485,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       disp1ptr[x] = (DispType)d;
     }
 
-    for (int x = 0; x < maxX1; x++) {
+    for (int x = 0; x < width; x++) {
       // we round the computed disparity both towards -inf and +inf and check
       // if either of the corresponding disparities in disp2 is consistent.
       // This is to give the computed disparity a chance to look valid if it is.
