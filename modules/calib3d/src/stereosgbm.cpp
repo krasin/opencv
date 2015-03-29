@@ -113,7 +113,7 @@ struct StereoSGBMParams {
  */
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
-  int x, width = img1.cols;
+  int width = img1.cols;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width * 2, * prow2 = prow1 + width * 2;
 
@@ -127,7 +127,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
   int n1 = y > 0 ? -(int)img1.step : 0, s1 = y < img1.rows - 1 ? (int)img1.step : 0;
   int n2 = y > 0 ? -(int)img2.step : 0, s2 = y < img2.rows - 1 ? (int)img2.step : 0;
 
-  for (x = 1; x < width - 1; x++) {
+  for (int x = 1; x < width - 1; x++) {
     prow1[x] = tab[(row1[x + 1] - row1[x - 1]) * 2 + row1[x + n1 + 1] - row1[x + n1 - 1] +
                    row1[x + s1 + 1] - row1[x + s1 - 1]];
     prow2[width - 1 - x] = tab[(row2[x + 1] - row2[x - 1]) * 2 + row2[x + n2 + 1] -
@@ -145,7 +145,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
     // precompute
     //   v0 = min(row2[x-1/2], row2[x], row2[x+1/2]) and
     //   v1 = max(row2[x-1/2], row2[x], row2[x+1/2]) and
-    for (x = 0; x < width; x++) {
+    for (int x = 0; x < width; x++) {
       int v = prow2[x];
       int vl = x > 0 ? (v + prow2[x - 1]) / 2 : v;
       int vr = x < width - 1 ? (v + prow2[x + 1]) / 2 : v;
@@ -157,7 +157,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
       buffer[x + width] = (PixType)v1;
     }
 
-    for (x = 0; x < width; x++) {
+    for (int x = 0; x < width; x++) {
       int u = prow1[x];
       int ul = x > 0 ? (u + prow1[x - 1]) / 2 : u;
       int ur = x < width - 1 ? (u + prow1[x + 1]) / 2 : u;
