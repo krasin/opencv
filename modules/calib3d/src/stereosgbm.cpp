@@ -113,13 +113,13 @@ struct StereoSGBMParams {
  */
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
-  int x, c, width = img1.cols;
+  int x, width = img1.cols;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width * 2, * prow2 = prow1 + width * 2;
 
   tab += tabOfs;
 
-  for (c = 0; c < 2; c++) {
+  for (int c = 0; c < 2; c++) {
     prow1[width * c] = prow1[width * c + width - 1] = prow2[width * c] =
         prow2[width * c + width - 1] = tab[0];
   }
@@ -139,7 +139,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
 
   memset(cost, 0, width * D * sizeof(cost[0]));
 
-  for (c = 0; c < 2; c++, prow1 += width, prow2 += width) {
+  for (int c = 0; c < 2; c++, prow1 += width, prow2 += width) {
     int diff_scale = c < 1 ? 0 : 2;
 
     // precompute
