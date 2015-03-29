@@ -219,7 +219,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   const int DISP_SHIFT = StereoMatcher::DISP_SHIFT;
   const int DISP_SCALE = (1 << DISP_SHIFT);
   const CostType MAX_COST = SHRT_MAX;
-  printf("ALIGN: %d, DISP_SHIFT: %d, DISP_SCALE: %d, MAX_COST: %d\n", ALIGN, DISP_SHIFT, DISP_SCALE, (int) MAX_COST);
+  printf("ALIGN: %d, DISP_SHIFT: %d, DISP_SCALE: %d, MAX_COST: %d\n", ALIGN, DISP_SHIFT, DISP_SCALE,
+         (int)MAX_COST);
 
   int minD = params.minDisparity, maxD = minD + params.numDisparities;
   Size SADWindowSize;
@@ -289,254 +290,251 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     Cbuf[k] = (CostType)P2;
   }
 
-  {
-    int x1, y1, x2, y2, dx, dy;
+  int x1, y1, x2, y2, dx, dy;
 
-    y1 = 0;
-    y2 = height;
-    dy = 1;
-    x1 = 0;
-    x2 = width1;
-    dx = 1;
+  y1 = 0;
+  y2 = height;
+  dy = 1;
+  x1 = 0;
+  x2 = width1;
+  dx = 1;
 
-    CostType* Lr[NLR] = {0}, * minLr[NLR] = {0};
+  CostType* Lr[NLR] = {0}, * minLr[NLR] = {0};
 
-    for (int k = 0; k < NLR; k++) {
-      // shift Lr[k] and minLr[k] pointers, because we allocated them with the borders,
-      // and will occasionally use negative indices with the arrays
-      // we need to shift Lr[k] pointers by 1, to give the space for d=-1.
-      // however, then the alignment will be imperfect, i.e. bad for SSE,
-      // thus we shift the pointers by 8 (8*sizeof(short) == 16 - ideal alignment)
-      Lr[k] = pixDiff + costBufSize + LrSize * k + NRD2 * LrBorder + 8;
-      memset(Lr[k] - LrBorder * NRD2 - 8, 0, LrSize * sizeof(CostType));
-      minLr[k] = pixDiff + costBufSize + LrSize * NLR + minLrSize * k + NR2 * LrBorder;
-      memset(minLr[k] - LrBorder * NR2, 0, minLrSize * sizeof(CostType));
-    }
+  for (int k = 0; k < NLR; k++) {
+    // shift Lr[k] and minLr[k] pointers, because we allocated them with the borders,
+    // and will occasionally use negative indices with the arrays
+    // we need to shift Lr[k] pointers by 1, to give the space for d=-1.
+    // however, then the alignment will be imperfect, i.e. bad for SSE,
+    // thus we shift the pointers by 8 (8*sizeof(short) == 16 - ideal alignment)
+    Lr[k] = pixDiff + costBufSize + LrSize * k + NRD2 * LrBorder + 8;
+    memset(Lr[k] - LrBorder * NRD2 - 8, 0, LrSize * sizeof(CostType));
+    minLr[k] = pixDiff + costBufSize + LrSize * NLR + minLrSize * k + NR2 * LrBorder;
+    memset(minLr[k] - LrBorder * NR2, 0, minLrSize * sizeof(CostType));
+  }
 
-    for (int y = y1; y != y2; y += dy) {
-      int x, d;
-      DispType* disp1ptr = disp1.ptr<DispType>(y);
-      CostType* C = Cbuf;
-      CostType* S = Sbuf;
+  for (int y = y1; y != y2; y += dy) {
+    int x, d;
+    DispType* disp1ptr = disp1.ptr<DispType>(y);
+    CostType* C = Cbuf;
+    CostType* S = Sbuf;
 
-      {
-        int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
+    {
+      int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
 
-        for (int k = dy1; k <= dy2; k++) {
-          CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
+      for (int k = dy1; k <= dy2; k++) {
+        CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
 
-          if (k < height) {
-            calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
+        if (k < height) {
+          calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
 
-            memset(hsumAdd, 0, D * sizeof(CostType));
-            for (x = 0; x <= SW2 * D; x += D) {
-              int scale = x == 0 ? SW2 + 1 : 1;
-              for (d = 0; d < D; d++) hsumAdd[d] = (CostType)(hsumAdd[d] + pixDiff[x + d] * scale);
-            }
-
-            if (y > 0) {
-              const CostType* hsumSub =
-                  hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
-              const CostType* Cprev = C;
-
-              for (x = D; x < width1 * D; x += D) {
-                const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
-                const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
-
-                {
-                  for (d = 0; d < D; d++) {
-                    int hv = hsumAdd[x + d] =
-                        (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
-                    C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
-                  }
-                }
-              }
-            } else {
-              for (x = D; x < width1 * D; x += D) {
-                const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
-                const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
-
-                for (d = 0; d < D; d++)
-                  hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
-              }
-            }
+          memset(hsumAdd, 0, D * sizeof(CostType));
+          for (x = 0; x <= SW2 * D; x += D) {
+            int scale = x == 0 ? SW2 + 1 : 1;
+            for (d = 0; d < D; d++) hsumAdd[d] = (CostType)(hsumAdd[d] + pixDiff[x + d] * scale);
           }
 
-          if (y == 0) {
-            int scale = k == 0 ? SH2 + 1 : 1;
-            for (x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+          if (y > 0) {
+            const CostType* hsumSub =
+                hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
+            const CostType* Cprev = C;
+
+            for (x = D; x < width1 * D; x += D) {
+              const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+              const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
+
+              {
+                for (d = 0; d < D; d++) {
+                  int hv = hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
+                  C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
+                }
+              }
+            }
+          } else {
+            for (x = D; x < width1 * D; x += D) {
+              const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+              const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
+
+              for (d = 0; d < D; d++)
+                hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
+            }
           }
         }
 
-        // also, clear the S buffer
-        for (int k = 0; k < width1 * D; k++) S[k] = 0;
+        if (y == 0) {
+          int scale = k == 0 ? SH2 + 1 : 1;
+          for (x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+        }
       }
 
-      // clear the left and the right borders
-      memset(Lr[0] - NRD2 * LrBorder - 8, 0, NRD2 * LrBorder * sizeof(CostType));
-      memset(Lr[0] + width1 * NRD2 - 8, 0, NRD2 * LrBorder * sizeof(CostType));
-      memset(minLr[0] - NR2 * LrBorder, 0, NR2 * LrBorder * sizeof(CostType));
-      memset(minLr[0] + width1 * NR2, 0, NR2 * LrBorder * sizeof(CostType));
+      // also, clear the S buffer
+      for (int k = 0; k < width1 * D; k++) S[k] = 0;
+    }
 
-      /*
-       [formula 13 in the paper]
-       compute L_r(p, d) = C(p, d) +
-       min(L_r(p-r, d),
-       L_r(p-r, d-1) + P1,
-       L_r(p-r, d+1) + P1,
-       min_k L_r(p-r, k) + P2) - min_k L_r(p-r, k)
-       where p = (x,y), r is one of the directions.
-       we process all the directions at once:
-       0: r=(-dx, 0)
-       1: r=(-1, -dy)
-       2: r=(0, -dy)
-       3: r=(1, -dy)
-       4: r=(-2, -dy)
-       5: r=(-1, -dy*2)
-       6: r=(1, -dy*2)
-       7: r=(2, -dy)
-       */
-      for (x = x1; x != x2; x += dx) {
-        int xm = x * NR2, xd = xm * D2;
+    // clear the left and the right borders
+    memset(Lr[0] - NRD2 * LrBorder - 8, 0, NRD2 * LrBorder * sizeof(CostType));
+    memset(Lr[0] + width1 * NRD2 - 8, 0, NRD2 * LrBorder * sizeof(CostType));
+    memset(minLr[0] - NR2 * LrBorder, 0, NR2 * LrBorder * sizeof(CostType));
+    memset(minLr[0] + width1 * NR2, 0, NR2 * LrBorder * sizeof(CostType));
 
-        int delta0 = minLr[0][xm - dx * NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
-        int delta2 = minLr[1][xm + 2] + P2, delta3 = minLr[1][xm + NR2 + 3] + P2;
+    /*
+     [formula 13 in the paper]
+     compute L_r(p, d) = C(p, d) +
+     min(L_r(p-r, d),
+     L_r(p-r, d-1) + P1,
+     L_r(p-r, d+1) + P1,
+     min_k L_r(p-r, k) + P2) - min_k L_r(p-r, k)
+     where p = (x,y), r is one of the directions.
+     we process all the directions at once:
+     0: r=(-dx, 0)
+     1: r=(-1, -dy)
+     2: r=(0, -dy)
+     3: r=(1, -dy)
+     4: r=(-2, -dy)
+     5: r=(-1, -dy*2)
+     6: r=(1, -dy*2)
+     7: r=(2, -dy)
+     */
+    for (x = x1; x != x2; x += dx) {
+      int xm = x * NR2, xd = xm * D2;
 
-        CostType* Lr_p0 = Lr[0] + xd - dx * NRD2;
-        CostType* Lr_p1 = Lr[1] + xd - NRD2 + D2;
-        CostType* Lr_p2 = Lr[1] + xd + D2 * 2;
-        CostType* Lr_p3 = Lr[1] + xd + NRD2 + D2 * 3;
+      int delta0 = minLr[0][xm - dx * NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
+      int delta2 = minLr[1][xm + 2] + P2, delta3 = minLr[1][xm + NR2 + 3] + P2;
 
-        Lr_p0[-1] = Lr_p0[D] = Lr_p1[-1] = Lr_p1[D] = Lr_p2[-1] = Lr_p2[D] = Lr_p3[-1] = Lr_p3[D] =
-            MAX_COST;
+      CostType* Lr_p0 = Lr[0] + xd - dx * NRD2;
+      CostType* Lr_p1 = Lr[1] + xd - NRD2 + D2;
+      CostType* Lr_p2 = Lr[1] + xd + D2 * 2;
+      CostType* Lr_p3 = Lr[1] + xd + NRD2 + D2 * 3;
 
-        CostType* Lr_p = Lr[0] + xd;
-        const CostType* Cp = C + x * D;
+      Lr_p0[-1] = Lr_p0[D] = Lr_p1[-1] = Lr_p1[D] = Lr_p2[-1] = Lr_p2[D] = Lr_p3[-1] = Lr_p3[D] =
+          MAX_COST;
+
+      CostType* Lr_p = Lr[0] + xd;
+      const CostType* Cp = C + x * D;
+      CostType* Sp = S + x * D;
+
+      {
+        int minL0 = MAX_COST, minL1 = MAX_COST, minL2 = MAX_COST, minL3 = MAX_COST;
+
+        for (d = 0; d < D; d++) {
+          int Cpd = Cp[d], L0, L1, L2, L3;
+
+          L0 = Cpd + std::min((int)Lr_p0[d],
+                              std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
+               delta0;
+          L1 = Cpd + std::min((int)Lr_p1[d],
+                              std::min(Lr_p1[d - 1] + P1, std::min(Lr_p1[d + 1] + P1, delta1))) -
+               delta1;
+          L2 = Cpd + std::min((int)Lr_p2[d],
+                              std::min(Lr_p2[d - 1] + P1, std::min(Lr_p2[d + 1] + P1, delta2))) -
+               delta2;
+          L3 = Cpd + std::min((int)Lr_p3[d],
+                              std::min(Lr_p3[d - 1] + P1, std::min(Lr_p3[d + 1] + P1, delta3))) -
+               delta3;
+
+          Lr_p[d] = (CostType)L0;
+          minL0 = std::min(minL0, L0);
+
+          Lr_p[d + D2] = (CostType)L1;
+          minL1 = std::min(minL1, L1);
+
+          Lr_p[d + D2 * 2] = (CostType)L2;
+          minL2 = std::min(minL2, L2);
+
+          Lr_p[d + D2 * 3] = (CostType)L3;
+          minL3 = std::min(minL3, L3);
+
+          Sp[d] = saturate_cast<CostType>(Sp[d] + L0 + L1 + L2 + L3);
+        }
+        minLr[0][xm] = (CostType)minL0;
+        minLr[0][xm + 1] = (CostType)minL1;
+        minLr[0][xm + 2] = (CostType)minL2;
+        minLr[0][xm + 3] = (CostType)minL3;
+      }
+    }
+
+    {
+      for (x = 0; x < width; x++) {
+        disp1ptr[x] = disp2ptr[x] = (DispType)INVALID_DISP_SCALED;
+        disp2cost[x] = MAX_COST;
+      }
+
+      for (x = width1 - 1; x >= 0; x--) {
         CostType* Sp = S + x * D;
+        int minS = MAX_COST, bestDisp = -1;
 
         {
-          int minL0 = MAX_COST, minL1 = MAX_COST, minL2 = MAX_COST, minL3 = MAX_COST;
+          int xm = x * NR2, xd = xm * D2;
 
-          for (d = 0; d < D; d++) {
-            int Cpd = Cp[d], L0, L1, L2, L3;
+          int minL0 = MAX_COST;
+          int delta0 = minLr[0][xm + NR2] + P2;
+          CostType* Lr_p0 = Lr[0] + xd + NRD2;
+          Lr_p0[-1] = Lr_p0[D] = MAX_COST;
+          CostType* Lr_p = Lr[0] + xd;
 
-            L0 = Cpd + std::min((int)Lr_p0[d],
-                                std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
-                 delta0;
-            L1 = Cpd + std::min((int)Lr_p1[d],
-                                std::min(Lr_p1[d - 1] + P1, std::min(Lr_p1[d + 1] + P1, delta1))) -
-                 delta1;
-            L2 = Cpd + std::min((int)Lr_p2[d],
-                                std::min(Lr_p2[d - 1] + P1, std::min(Lr_p2[d + 1] + P1, delta2))) -
-                 delta2;
-            L3 = Cpd + std::min((int)Lr_p3[d],
-                                std::min(Lr_p3[d - 1] + P1, std::min(Lr_p3[d + 1] + P1, delta3))) -
-                 delta3;
-
-            Lr_p[d] = (CostType)L0;
-            minL0 = std::min(minL0, L0);
-
-            Lr_p[d + D2] = (CostType)L1;
-            minL1 = std::min(minL1, L1);
-
-            Lr_p[d + D2 * 2] = (CostType)L2;
-            minL2 = std::min(minL2, L2);
-
-            Lr_p[d + D2 * 3] = (CostType)L3;
-            minL3 = std::min(minL3, L3);
-
-            Sp[d] = saturate_cast<CostType>(Sp[d] + L0 + L1 + L2 + L3);
-          }
-          minLr[0][xm] = (CostType)minL0;
-          minLr[0][xm + 1] = (CostType)minL1;
-          minLr[0][xm + 2] = (CostType)minL2;
-          minLr[0][xm + 3] = (CostType)minL3;
-        }
-      }
-
-      {
-        for (x = 0; x < width; x++) {
-          disp1ptr[x] = disp2ptr[x] = (DispType)INVALID_DISP_SCALED;
-          disp2cost[x] = MAX_COST;
-        }
-
-        for (x = width1 - 1; x >= 0; x--) {
-          CostType* Sp = S + x * D;
-          int minS = MAX_COST, bestDisp = -1;
+          const CostType* Cp = C + x * D;
 
           {
-            int xm = x * NR2, xd = xm * D2;
+            for (d = 0; d < D; d++) {
+              int L0 = Cp[d] +
+                       std::min((int)Lr_p0[d],
+                                std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
+                       delta0;
 
-            int minL0 = MAX_COST;
-            int delta0 = minLr[0][xm + NR2] + P2;
-            CostType* Lr_p0 = Lr[0] + xd + NRD2;
-            Lr_p0[-1] = Lr_p0[D] = MAX_COST;
-            CostType* Lr_p = Lr[0] + xd;
+              Lr_p[d] = (CostType)L0;
+              minL0 = std::min(minL0, L0);
 
-            const CostType* Cp = C + x * D;
-
-            {
-              for (d = 0; d < D; d++) {
-                int L0 = Cp[d] +
-                         std::min((int)Lr_p0[d], std::min(Lr_p0[d - 1] + P1,
-                                                          std::min(Lr_p0[d + 1] + P1, delta0))) -
-                         delta0;
-
-                Lr_p[d] = (CostType)L0;
-                minL0 = std::min(minL0, L0);
-
-                int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
-                if (Sval < minS) {
-                  minS = Sval;
-                  bestDisp = d;
-                }
+              int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
+              if (Sval < minS) {
+                minS = Sval;
+                bestDisp = d;
               }
-              minLr[0][xm] = (CostType)minL0;
             }
+            minLr[0][xm] = (CostType)minL0;
           }
-
-          for (d = 0; d < D; d++) {
-            if (Sp[d] * (100 - uniquenessRatio) < minS * 100 && std::abs(bestDisp - d) > 1) break;
-          }
-          if (d < D) continue;
-          d = bestDisp;
-          int _x2 = x + minX1 - d - minD;
-          if (disp2cost[_x2] > minS) {
-            disp2cost[_x2] = (CostType)minS;
-            disp2ptr[_x2] = (DispType)(d + minD);
-          }
-
-          if (0 < d && d < D - 1) {
-            // do subpixel quadratic interpolation:
-            //   fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
-            //   then find minimum of the parabola.
-            int denom2 = std::max(Sp[d - 1] + Sp[d + 1] - 2 * Sp[d], 1);
-            d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
-          } else
-            d *= DISP_SCALE;
-          disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
         }
 
-        for (x = minX1; x < maxX1; x++) {
-          // we round the computed disparity both towards -inf and +inf and check
-          // if either of the corresponding disparities in disp2 is consistent.
-          // This is to give the computed disparity a chance to look valid if it is.
-          int d1 = disp1ptr[x];
-          if (d1 == INVALID_DISP_SCALED) continue;
-          int _d = d1 >> DISP_SHIFT;
-          int d_ = (d1 + DISP_SCALE - 1) >> DISP_SHIFT;
-          int _x = x - _d, x_ = x - d_;
-          if (0 <= _x && _x < width && disp2ptr[_x] >= minD &&
-              std::abs(disp2ptr[_x] - _d) > disp12MaxDiff && 0 <= x_ && x_ < width &&
-              disp2ptr[x_] >= minD && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
-            disp1ptr[x] = (DispType)INVALID_DISP_SCALED;
+        for (d = 0; d < D; d++) {
+          if (Sp[d] * (100 - uniquenessRatio) < minS * 100 && std::abs(bestDisp - d) > 1) break;
         }
+        if (d < D) continue;
+        d = bestDisp;
+        int _x2 = x + minX1 - d - minD;
+        if (disp2cost[_x2] > minS) {
+          disp2cost[_x2] = (CostType)minS;
+          disp2ptr[_x2] = (DispType)(d + minD);
+        }
+
+        if (0 < d && d < D - 1) {
+          // do subpixel quadratic interpolation:
+          //   fit parabola into (x1=d-1, y1=Sp[d-1]), (x2=d, y2=Sp[d]), (x3=d+1, y3=Sp[d+1])
+          //   then find minimum of the parabola.
+          int denom2 = std::max(Sp[d - 1] + Sp[d + 1] - 2 * Sp[d], 1);
+          d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
+        } else
+          d *= DISP_SCALE;
+        disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
       }
 
-      // now shift the cyclic buffers
-      std::swap(Lr[0], Lr[1]);
-      std::swap(minLr[0], minLr[1]);
+      for (x = minX1; x < maxX1; x++) {
+        // we round the computed disparity both towards -inf and +inf and check
+        // if either of the corresponding disparities in disp2 is consistent.
+        // This is to give the computed disparity a chance to look valid if it is.
+        int d1 = disp1ptr[x];
+        if (d1 == INVALID_DISP_SCALED) continue;
+        int _d = d1 >> DISP_SHIFT;
+        int d_ = (d1 + DISP_SCALE - 1) >> DISP_SHIFT;
+        int _x = x - _d, x_ = x - d_;
+        if (0 <= _x && _x < width && disp2ptr[_x] >= minD &&
+            std::abs(disp2ptr[_x] - _d) > disp12MaxDiff && 0 <= x_ && x_ < width &&
+            disp2ptr[x_] >= minD && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
+          disp1ptr[x] = (DispType)INVALID_DISP_SCALED;
+      }
     }
+
+    // now shift the cyclic buffers
+    std::swap(Lr[0], Lr[1]);
+    std::swap(minLr[0], minLr[1]);
   }
 }
 
