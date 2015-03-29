@@ -310,55 +310,55 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     CostType* C = Cbuf;
     CostType* S = Sbuf;
 
-      int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
+    int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
 
-      for (int k = dy1; k <= dy2; k++) {
-        CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
+    for (int k = dy1; k <= dy2; k++) {
+      CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
 
-        if (k < height) {
-          calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
+      if (k < height) {
+        calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
 
-          memset(hsumAdd, 0, D * sizeof(CostType));
-          for (int x = 0; x <= SW2 * D; x += D) {
-            int scale = x == 0 ? SW2 + 1 : 1;
-            for (d = 0; d < D; d++) hsumAdd[d] = (CostType)(hsumAdd[d] + pixDiff[x + d] * scale);
-          }
-
-          if (y > 0) {
-            const CostType* hsumSub =
-                hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
-            const CostType* Cprev = C;
-
-            for (int x = D; x < width1 * D; x += D) {
-              const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
-              const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
-
-              {
-                for (d = 0; d < D; d++) {
-                  int hv = hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
-                  C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
-                }
-              }
-            }
-          } else {
-            for (int x = D; x < width1 * D; x += D) {
-              const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
-              const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
-
-              for (d = 0; d < D; d++)
-                hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
-            }
-          }
+        memset(hsumAdd, 0, D * sizeof(CostType));
+        for (int x = 0; x <= SW2 * D; x += D) {
+          int scale = x == 0 ? SW2 + 1 : 1;
+          for (d = 0; d < D; d++) hsumAdd[d] = (CostType)(hsumAdd[d] + pixDiff[x + d] * scale);
         }
 
-        if (y == 0) {
-          int scale = k == 0 ? SH2 + 1 : 1;
-          for (int x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+        if (y > 0) {
+          const CostType* hsumSub =
+              hsumBuf + (std::max(y - SH2 - 1, 0) % hsumBufNRows) * costBufSize;
+          const CostType* Cprev = C;
+
+          for (int x = D; x < width1 * D; x += D) {
+            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+            const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
+
+            {
+              for (d = 0; d < D; d++) {
+                int hv = hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
+                C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
+              }
+            }
+          }
+        } else {
+          for (int x = D; x < width1 * D; x += D) {
+            const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width1 - 1) * D);
+            const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
+
+            for (d = 0; d < D; d++)
+              hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
+          }
         }
       }
 
-      // also, clear the S buffer
-      for (int k = 0; k < width1 * D; k++) S[k] = 0;
+      if (y == 0) {
+        int scale = k == 0 ? SH2 + 1 : 1;
+        for (int x = 0; x < width1 * D; x++) C[x] = (CostType)(C[x] + hsumAdd[x] * scale);
+      }
+    }
+
+    // also, clear the S buffer
+    for (int k = 0; k < width1 * D; k++) S[k] = 0;
 
     // clear the left and the right borders
     memset(Lr[0] - NRD2 * LrBorder - 8, 0, NRD2 * LrBorder * sizeof(CostType));
