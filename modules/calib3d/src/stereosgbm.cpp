@@ -102,9 +102,9 @@ struct StereoSGBMParams {
 };
 
 /*
- For each pixel row1[x], 0 <= minX <= x < maxX <= width,
+ For each pixel row1[x], 0 <= x < maxX <= width,
  and for each disparity 0<=d<maxD the function
- computes the cost (cost[(x-minX)*maxD + d]), depending on the difference between
+ computes the cost (cost[x *maxD + d]), depending on the difference between
  row1[x] and row2[x-d]. The subpixel algorithm from
  "Depth Discontinuities by Pixel-to-Pixel Stereo" by Stan Birchfield and C. Tomasi
  is used, hence the suffix BT.
@@ -114,9 +114,9 @@ struct StereoSGBMParams {
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
-  int minX1 = 0, maxX1 = width;
-  int minX2 = 0, maxX2 = width;
-  int D = maxD, width1 = maxX1 - minX1, width2 = maxX2 - minX2;
+  int maxX1 = width;
+  int maxX2 = width;
+  int D = maxD, width1 = maxX1, width2 = maxX2;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width2 * 2, * prow2 = prow1 + width * 2;
 
@@ -142,16 +142,13 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
 
   memset(cost, 0, width1 * D * sizeof(cost[0]));
 
-  buffer -= minX2;
-  cost -= minX1 * D;  // simplify the cost indices inside the loop
-
   for (c = 0; c < 2; c++, prow1 += width, prow2 += width) {
     int diff_scale = c < 1 ? 0 : 2;
 
     // precompute
     //   v0 = min(row2[x-1/2], row2[x], row2[x+1/2]) and
     //   v1 = max(row2[x-1/2], row2[x], row2[x+1/2]) and
-    for (x = minX2; x < maxX2; x++) {
+    for (x = 0; x < maxX2; x++) {
       int v = prow2[x];
       int vl = x > 0 ? (v + prow2[x - 1]) / 2 : v;
       int vr = x < width - 1 ? (v + prow2[x + 1]) / 2 : v;
@@ -163,7 +160,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
       buffer[x + width2] = (PixType)v1;
     }
 
-    for (x = minX1; x < maxX1; x++) {
+    for (x = 0; x < maxX1; x++) {
       int u = prow1[x];
       int ul = x > 0 ? (u + prow1[x - 1]) / 2 : u;
       int ur = x < width - 1 ? (u + prow1[x + 1]) / 2 : u;
@@ -229,8 +226,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
   int width = disp1.cols, height = disp1.rows;
-  int minX1 = 0, maxX1 = width;
-  int D = maxD, width1 = maxX1 - minX1;
+  int maxX1 = width;
+  int D = maxD, width1 = maxX1;
   int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int SW2 = SADWindowSize.width / 2, SH2 = SADWindowSize.height / 2;
   const int TAB_OFS = 256 * 4, TAB_SIZE = 256 + TAB_OFS * 2;
@@ -240,7 +237,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     clipTab[k] = (PixType)(std::min(std::max(k - TAB_OFS, -ftzero), ftzero) + ftzero);
   }
 
-  if (minX1 >= maxX1) {
+  if (0 >= maxX1) {
     disp1 = Scalar::all(INVALID_DISP_SCALED);
     return;
   }
@@ -479,7 +476,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       }
       if (d < D) continue;
       d = bestDisp;
-      int _x2 = x + minX1 - d;
+      int _x2 = x - d;
       if (disp2cost[_x2] > minS) {
         disp2cost[_x2] = (CostType)minS;
         disp2ptr[_x2] = (DispType)d;
@@ -493,10 +490,10 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
         d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
       } else
         d *= DISP_SCALE;
-      disp1ptr[x + minX1] = (DispType)d;
+      disp1ptr[x] = (DispType)d;
     }
 
-    for (int x = minX1; x < maxX1; x++) {
+    for (int x = 0; x < maxX1; x++) {
       // we round the computed disparity both towards -inf and +inf and check
       // if either of the corresponding disparities in disp2 is consistent.
       // This is to give the computed disparity a chance to look valid if it is.
