@@ -402,44 +402,42 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       const CostType* Cp = C + x * D;
       CostType* Sp = S + x * D;
 
-      {
-        int minL0 = MAX_COST, minL1 = MAX_COST, minL2 = MAX_COST, minL3 = MAX_COST;
+      int minL0 = MAX_COST, minL1 = MAX_COST, minL2 = MAX_COST, minL3 = MAX_COST;
 
-        for (d = 0; d < D; d++) {
-          int Cpd = Cp[d], L0, L1, L2, L3;
+      for (d = 0; d < D; d++) {
+        int Cpd = Cp[d], L0, L1, L2, L3;
 
-          L0 = Cpd + std::min((int)Lr_p0[d],
-                              std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
-               delta0;
-          L1 = Cpd + std::min((int)Lr_p1[d],
-                              std::min(Lr_p1[d - 1] + P1, std::min(Lr_p1[d + 1] + P1, delta1))) -
-               delta1;
-          L2 = Cpd + std::min((int)Lr_p2[d],
-                              std::min(Lr_p2[d - 1] + P1, std::min(Lr_p2[d + 1] + P1, delta2))) -
-               delta2;
-          L3 = Cpd + std::min((int)Lr_p3[d],
-                              std::min(Lr_p3[d - 1] + P1, std::min(Lr_p3[d + 1] + P1, delta3))) -
-               delta3;
+        L0 = Cpd + std::min((int)Lr_p0[d],
+                            std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
+             delta0;
+        L1 = Cpd + std::min((int)Lr_p1[d],
+                            std::min(Lr_p1[d - 1] + P1, std::min(Lr_p1[d + 1] + P1, delta1))) -
+             delta1;
+        L2 = Cpd + std::min((int)Lr_p2[d],
+                            std::min(Lr_p2[d - 1] + P1, std::min(Lr_p2[d + 1] + P1, delta2))) -
+             delta2;
+        L3 = Cpd + std::min((int)Lr_p3[d],
+                            std::min(Lr_p3[d - 1] + P1, std::min(Lr_p3[d + 1] + P1, delta3))) -
+             delta3;
 
-          Lr_p[d] = (CostType)L0;
-          minL0 = std::min(minL0, L0);
+        Lr_p[d] = (CostType)L0;
+        minL0 = std::min(minL0, L0);
 
-          Lr_p[d + D2] = (CostType)L1;
-          minL1 = std::min(minL1, L1);
+        Lr_p[d + D2] = (CostType)L1;
+        minL1 = std::min(minL1, L1);
 
-          Lr_p[d + D2 * 2] = (CostType)L2;
-          minL2 = std::min(minL2, L2);
+        Lr_p[d + D2 * 2] = (CostType)L2;
+        minL2 = std::min(minL2, L2);
 
-          Lr_p[d + D2 * 3] = (CostType)L3;
-          minL3 = std::min(minL3, L3);
+        Lr_p[d + D2 * 3] = (CostType)L3;
+        minL3 = std::min(minL3, L3);
 
-          Sp[d] = saturate_cast<CostType>(Sp[d] + L0 + L1 + L2 + L3);
-        }
-        minLr[0][xm] = (CostType)minL0;
-        minLr[0][xm + 1] = (CostType)minL1;
-        minLr[0][xm + 2] = (CostType)minL2;
-        minLr[0][xm + 3] = (CostType)minL3;
+        Sp[d] = saturate_cast<CostType>(Sp[d] + L0 + L1 + L2 + L3);
       }
+      minLr[0][xm] = (CostType)minL0;
+      minLr[0][xm + 1] = (CostType)minL1;
+      minLr[0][xm + 2] = (CostType)minL2;
+      minLr[0][xm + 3] = (CostType)minL3;
     }
 
     {
