@@ -290,12 +290,6 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     Cbuf[k] = (CostType)P2;
   }
 
-  int x1, x2, dx;
-
-  x1 = 0;
-  x2 = width1;
-  dx = 1;
-
   CostType* Lr[NLR] = {0}, * minLr[NLR] = {0};
 
   for (int k = 0; k < NLR; k++) {
@@ -392,13 +386,13 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
      6: r=(1, -dy*2)
      7: r=(2, -dy)
      */
-    for (x = x1; x != x2; x += dx) {
+    for (x = 0; x != width1; x++) {
       int xm = x * NR2, xd = xm * D2;
 
-      int delta0 = minLr[0][xm - dx * NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
+      int delta0 = minLr[0][xm - NR2] + P2, delta1 = minLr[1][xm - NR2 + 1] + P2;
       int delta2 = minLr[1][xm + 2] + P2, delta3 = minLr[1][xm + NR2 + 3] + P2;
 
-      CostType* Lr_p0 = Lr[0] + xd - dx * NRD2;
+      CostType* Lr_p0 = Lr[0] + xd - NRD2;
       CostType* Lr_p1 = Lr[1] + xd - NRD2 + D2;
       CostType* Lr_p2 = Lr[1] + xd + D2 * 2;
       CostType* Lr_p3 = Lr[1] + xd + NRD2 + D2 * 3;
