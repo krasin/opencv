@@ -310,7 +310,6 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
     CostType* C = Cbuf;
     CostType* S = Sbuf;
 
-    {
       int dy1 = y == 0 ? 0 : y + SH2, dy2 = y == 0 ? SH2 : dy1;
 
       for (int k = dy1; k <= dy2; k++) {
@@ -360,7 +359,6 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
 
       // also, clear the S buffer
       for (int k = 0; k < width1 * D; k++) S[k] = 0;
-    }
 
     // clear the left and the right borders
     memset(Lr[0] - NRD2 * LrBorder - 8, 0, NRD2 * LrBorder * sizeof(CostType));
