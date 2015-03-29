@@ -452,36 +452,31 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
         CostType* Sp = S + x * D;
         int minS = MAX_COST, bestDisp = -1;
 
-        {
-          int xm = x * NR2, xd = xm * D2;
+        int xm = x * NR2, xd = xm * D2;
 
-          int minL0 = MAX_COST;
-          int delta0 = minLr[0][xm + NR2] + P2;
-          CostType* Lr_p0 = Lr[0] + xd + NRD2;
-          Lr_p0[-1] = Lr_p0[D] = MAX_COST;
-          CostType* Lr_p = Lr[0] + xd;
+        int minL0 = MAX_COST;
+        int delta0 = minLr[0][xm + NR2] + P2;
+        CostType* Lr_p0 = Lr[0] + xd + NRD2;
+        Lr_p0[-1] = Lr_p0[D] = MAX_COST;
+        CostType* Lr_p = Lr[0] + xd;
 
-          const CostType* Cp = C + x * D;
+        const CostType* Cp = C + x * D;
 
-          {
-            for (d = 0; d < D; d++) {
-              int L0 = Cp[d] +
-                       std::min((int)Lr_p0[d],
-                                std::min(Lr_p0[d - 1] + P1, std::min(Lr_p0[d + 1] + P1, delta0))) -
-                       delta0;
+        for (d = 0; d < D; d++) {
+          int L0 = Cp[d] + std::min((int)Lr_p0[d], std::min(Lr_p0[d - 1] + P1,
+                                                            std::min(Lr_p0[d + 1] + P1, delta0))) -
+                   delta0;
 
-              Lr_p[d] = (CostType)L0;
-              minL0 = std::min(minL0, L0);
+          Lr_p[d] = (CostType)L0;
+          minL0 = std::min(minL0, L0);
 
-              int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
-              if (Sval < minS) {
-                minS = Sval;
-                bestDisp = d;
-              }
-            }
-            minLr[0][xm] = (CostType)minL0;
+          int Sval = Sp[d] = saturate_cast<CostType>(Sp[d] + L0);
+          if (Sval < minS) {
+            minS = Sval;
+            bestDisp = d;
           }
         }
+        minLr[0][xm] = (CostType)minL0;
 
         for (d = 0; d < D; d++) {
           if (Sp[d] * (100 - uniquenessRatio) < minS * 100 && std::abs(bestDisp - d) > 1) break;
