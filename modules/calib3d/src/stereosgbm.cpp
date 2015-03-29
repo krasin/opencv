@@ -109,7 +109,7 @@ struct StereoSGBMParams {
  "Depth Discontinuities by Pixel-to-Pixel Stereo" by Stan Birchfield and C. Tomasi
  is used, hence the suffix BT.
 
- the temporary buffer should contain width*2 elements
+ the temporary buffer should contain width*4 elements
  */
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
