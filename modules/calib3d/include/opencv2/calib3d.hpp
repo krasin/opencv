@@ -1364,12 +1364,12 @@ CV_EXPORTS_W void filterSpeckles( InputOutputArray img, double newVal,
 
 //! computes valid disparity ROI from the valid ROIs of the rectified images (that are returned by cv::stereoRectify())
 CV_EXPORTS_W Rect getValidDisparityROI( Rect roi1, Rect roi2,
-                                        int minDisparity, int numberOfDisparities,
+                                        int numberOfDisparities,
                                         int SADWindowSize );
 
 //! validates disparity using the left-right check. The matrix "cost" should be computed by the stereo correspondence algorithm
 CV_EXPORTS_W void validateDisparity( InputOutputArray disparity, InputArray cost,
-                                     int minDisparity, int numberOfDisparities,
+                                     int numberOfDisparities,
                                      int disp12MaxDisp = 1 );
 
 /** @brief Reprojects a disparity image to 3D space.
@@ -1460,9 +1460,6 @@ public:
      */
     CV_WRAP virtual void compute( InputArray left, InputArray right,
                                   OutputArray disparity ) = 0;
-
-    CV_WRAP virtual int getMinDisparity() const = 0;
-    CV_WRAP virtual void setMinDisparity(int minDisparity) = 0;
 
     CV_WRAP virtual int getNumDisparities() const = 0;
     CV_WRAP virtual void setNumDisparities(int numDisparities) = 0;
@@ -1610,7 +1607,7 @@ public:
     set StereoSGBM::numDisparities at minimum. The second constructor enables you to set each parameter
     to a custom value.
      */
-    CV_WRAP static Ptr<StereoSGBM> create(int minDisparity, int numDisparities, int blockSize,
+    CV_WRAP static Ptr<StereoSGBM> create(int numDisparities, int blockSize,
                                           int P1 = 0, int P2 = 0, int disp12MaxDiff = 0,
                                           int preFilterCap = 0, int uniquenessRatio = 0,
                                           int speckleWindowSize = 0, int speckleRange = 0,

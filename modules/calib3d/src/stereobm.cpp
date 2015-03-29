@@ -835,8 +835,10 @@ struct FindStereoCorrespInvoker : public ParallelLoopBody
 #endif
             findStereoCorrespondenceBM( left_i, right_i, disp_i, cost_i, *state, ptr, row0, rows - row1 );
 
-        if( state->disp12MaxDiff >= 0 )
-            validateDisparity( disp_i, cost_i, state->minDisparity, state->numDisparities, state->disp12MaxDiff );
+        if( state->disp12MaxDiff >= 0 ) {
+            CV_Assert(state->minDisparity == 0);
+            validateDisparity( disp_i, cost_i, state->numDisparities, state->disp12MaxDiff );
+	}
 
         if( roi.x > 0 )
         {
@@ -993,9 +995,10 @@ public:
         parallel_for_(Range(0, 2), PrefilterInvoker(left0, right0, left, right, _buf, _buf + bufSize1, &params), 1);
 
         Rect validDisparityRect(0, 0, width, height), R1 = params.roi1, R2 = params.roi2;
+	CV_Assert(params.minDisparity == 0);
         validDisparityRect = getValidDisparityROI(R1.area() > 0 ? Rect(0, 0, width, height) : validDisparityRect,
                                                   R2.area() > 0 ? Rect(0, 0, width, height) : validDisparityRect,
-                                                  params.minDisparity, params.numDisparities,
+                                                  params.numDisparities,
                                                   params.SADWindowSize);
 
         parallel_for_(Range(0, nstripes),

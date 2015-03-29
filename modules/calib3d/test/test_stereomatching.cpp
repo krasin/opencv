@@ -770,7 +770,7 @@ protected:
     {
         RunParams params = caseRunParams[caseIdx];
         assert( params.ndisp%16 == 0 );
-        Ptr<StereoSGBM> sgbm = StereoSGBM::create( 0, params.ndisp, params.winSize,
+        Ptr<StereoSGBM> sgbm = StereoSGBM::create( params.ndisp, params.winSize,
                                                  10*params.winSize*params.winSize,
                                                  40*params.winSize*params.winSize,
                                                  1, 63, 10, 100, 32, params.fullDP ?

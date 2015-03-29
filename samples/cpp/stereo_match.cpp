@@ -236,7 +236,6 @@ int main(int argc, char** argv)
     bm->setROI2(roi2);
     bm->setPreFilterCap(31);
     bm->setBlockSize(SADWindowSize > 0 ? SADWindowSize : 9);
-    bm->setMinDisparity(0);
     bm->setNumDisparities(numberOfDisparities);
     bm->setTextureThreshold(10);
     bm->setUniquenessRatio(15);
@@ -252,7 +251,6 @@ int main(int argc, char** argv)
 
     sgbm->setP1(8*cn*sgbmWinSize*sgbmWinSize);
     sgbm->setP2(32*cn*sgbmWinSize*sgbmWinSize);
-    sgbm->setMinDisparity(0);
     sgbm->setNumDisparities(numberOfDisparities);
     sgbm->setUniquenessRatio(10);
     sgbm->setSpeckleWindowSize(100);

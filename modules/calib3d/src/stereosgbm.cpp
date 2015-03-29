@@ -63,7 +63,7 @@ enum { NR = 16, NR2 = NR / 2 };
 
 struct StereoSGBMParams {
   StereoSGBMParams() {
-    minDisparity = numDisparities = 0;
+    numDisparities = 0;
     SADWindowSize = 0;
     P1 = P2 = 0;
     disp12MaxDiff = 0;
@@ -74,10 +74,9 @@ struct StereoSGBMParams {
     mode = StereoSGBM::MODE_SGBM;
   }
 
-  StereoSGBMParams(int _minDisparity, int _numDisparities, int _SADWindowSize, int _P1, int _P2,
+  StereoSGBMParams(int _numDisparities, int _SADWindowSize, int _P1, int _P2,
                    int _disp12MaxDiff, int _preFilterCap, int _uniquenessRatio,
                    int _speckleWindowSize, int _speckleRange, int _mode) {
-    minDisparity = _minDisparity;
     numDisparities = _numDisparities;
     SADWindowSize = _SADWindowSize;
     P1 = _P1;
@@ -90,7 +89,6 @@ struct StereoSGBMParams {
     mode = _mode;
   }
 
-  int minDisparity;
   int numDisparities;
   int SADWindowSize;
   int preFilterCap;
@@ -104,21 +102,21 @@ struct StereoSGBMParams {
 };
 
 /*
- For each pixel row1[x], max(-maxD, 0) <= minX <= x < maxX <= width - max(0, -minD),
- and for each disparity minD<=d<maxD the function
- computes the cost (cost[(x-minX)*(maxD - minD) + (d - minD)]), depending on the difference between
+ For each pixel row1[x], max(-maxD, 0) <= minX <= x < maxX <= width,
+ and for each disparity 0<=d<maxD the function
+ computes the cost (cost[(x-minX)*maxD + d]), depending on the difference between
  row1[x] and row2[x-d]. The subpixel algorithm from
  "Depth Discontinuities by Pixel-to-Pixel Stereo" by Stan Birchfield and C. Tomasi
  is used, hence the suffix BT.
 
  the temporary buffer should contain width2*2 elements
  */
-static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int minD, int maxD,
+static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD,
                             CostType* cost, PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
-  int minX1 = std::max(-maxD, 0), maxX1 = width + std::min(minD, 0);
-  int minX2 = std::max(minX1 - maxD, 0), maxX2 = std::min(maxX1 - minD, width);
-  int D = maxD - minD, width1 = maxX1 - minX1, width2 = maxX2 - minX2;
+  int minX1 = std::max(-maxD, 0), maxX1 = width;
+  int minX2 = std::max(minX1 - maxD, 0), maxX2 = std::min(maxX1, width);
+  int D = maxD, width1 = maxX1 - minX1, width2 = maxX2 - minX2;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width2 * 2, * prow2 = prow1 + width * 2;
 
@@ -145,7 +143,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int minD, i
   memset(cost, 0, width1 * D * sizeof(cost[0]));
 
   buffer -= minX2;
-  cost -= minX1 * D + minD;  // simplify the cost indices inside the loop
+  cost -= minX1 * D;  // simplify the cost indices inside the loop
 
   for (c = 0; c < 2; c++, prow1 += width, prow2 += width) {
     int diff_scale = c < 1 ? 0 : 2;
@@ -175,7 +173,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int minD, i
       u1 = std::max(u1, u);
 
       {
-        for (int d = minD; d < maxD; d++) {
+        for (int d = 0; d < maxD; d++) {
           int v = prow2[width - x - 1 + d];
           int v0 = buffer[width - x - 1 + d];
           int v1 = buffer[width - x - 1 + d + width2];
@@ -194,7 +192,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int minD, i
 /*
  computes disparity for "roi" in img1 w.r.t. img2 and write it to disp1buf.
  that is, disp1buf(x, y)=d means that img1(x+roi.x, y+roi.y) ~ img2(x+roi.x-d, y+roi.y).
- minD <= d < maxD.
+ 0 <= d < maxD.
  disp2full is the reverse disparity map, that is:
  disp2full(x+roi.x,y+roi.y)=d means that img2(x+roi.x, y+roi.y) ~ img1(x+roi.x+d, y+roi.y)
 
@@ -222,7 +220,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   printf("ALIGN: %d, DISP_SHIFT: %d, DISP_SCALE: %d, MAX_COST: %d\n", ALIGN, DISP_SHIFT, DISP_SCALE,
          (int)MAX_COST);
 
-  int minD = params.minDisparity, maxD = minD + params.numDisparities;
+  int maxD = params.numDisparities;
   Size SADWindowSize;
   SADWindowSize.width = SADWindowSize.height = params.SADWindowSize > 0 ? params.SADWindowSize : 5;
   int ftzero = std::max(params.preFilterCap, 15) | 1;
@@ -230,9 +228,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
   int width = disp1.cols, height = disp1.rows;
-  int minX1 = std::max(-maxD, 0), maxX1 = width + std::min(minD, 0);
-  int D = maxD - minD, width1 = maxX1 - minX1;
-  int INVALID_DISP = minD - 1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
+  int minX1 = std::max(-maxD, 0), maxX1 = width;
+  int D = maxD, width1 = maxX1 - minX1;
+  int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int SW2 = SADWindowSize.width / 2, SH2 = SADWindowSize.height / 2;
   const int TAB_OFS = 256 * 4, TAB_SIZE = 256 + TAB_OFS * 2;
   PixType clipTab[TAB_SIZE];
@@ -316,7 +314,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
 
       if (k < height) {
-        calcPixelCostBT(img1, img2, k, minD, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
+        calcPixelCostBT(img1, img2, k, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
 
         memset(hsumAdd, 0, D * sizeof(CostType));
         for (int x = 0; x <= SW2 * D; x += D) {
@@ -480,10 +478,10 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       }
       if (d < D) continue;
       d = bestDisp;
-      int _x2 = x + minX1 - d - minD;
+      int _x2 = x + minX1 - d;
       if (disp2cost[_x2] > minS) {
         disp2cost[_x2] = (CostType)minS;
-        disp2ptr[_x2] = (DispType)(d + minD);
+        disp2ptr[_x2] = (DispType)d;
       }
 
       if (0 < d && d < D - 1) {
@@ -494,7 +492,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
         d = d * DISP_SCALE + ((Sp[d - 1] - Sp[d + 1]) * DISP_SCALE + denom2) / (denom2 * 2);
       } else
         d *= DISP_SCALE;
-      disp1ptr[x + minX1] = (DispType)(d + minD * DISP_SCALE);
+      disp1ptr[x + minX1] = (DispType)d;
     }
 
     for (int x = minX1; x < maxX1; x++) {
@@ -506,9 +504,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       int _d = d1 >> DISP_SHIFT;
       int d_ = (d1 + DISP_SCALE - 1) >> DISP_SHIFT;
       int _x = x - _d, x_ = x - d_;
-      if (0 <= _x && _x < width && disp2ptr[_x] >= minD &&
+      if (0 <= _x && _x < width && disp2ptr[_x] >= 0 &&
           std::abs(disp2ptr[_x] - _d) > disp12MaxDiff && 0 <= x_ && x_ < width &&
-          disp2ptr[x_] >= minD && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
+          disp2ptr[x_] >= 0 && std::abs(disp2ptr[x_] - d_) > disp12MaxDiff)
         disp1ptr[x] = (DispType)INVALID_DISP_SCALED;
     }
 
@@ -522,11 +520,11 @@ class StereoSGBMImpl : public StereoSGBM {
  public:
   StereoSGBMImpl() { params = StereoSGBMParams(); }
 
-  StereoSGBMImpl(int _minDisparity, int _numDisparities, int _SADWindowSize, int _P1, int _P2,
+  StereoSGBMImpl(int _numDisparities, int _SADWindowSize, int _P1, int _P2,
                  int _disp12MaxDiff, int _preFilterCap, int _uniquenessRatio,
                  int _speckleWindowSize, int _speckleRange, int _mode) {
     params =
-        StereoSGBMParams(_minDisparity, _numDisparities, _SADWindowSize, _P1, _P2, _disp12MaxDiff,
+        StereoSGBMParams(_numDisparities, _SADWindowSize, _P1, _P2, _disp12MaxDiff,
                          _preFilterCap, _uniquenessRatio, _speckleWindowSize, _speckleRange, _mode);
   }
 
@@ -541,13 +539,10 @@ class StereoSGBMImpl : public StereoSGBM {
     medianBlur(disp, disp, 3);
 
     if (params.speckleWindowSize > 0)
-      filterSpeckles(disp, (params.minDisparity - 1) * StereoMatcher::DISP_SCALE,
+      filterSpeckles(disp, -StereoMatcher::DISP_SCALE,
                      params.speckleWindowSize, StereoMatcher::DISP_SCALE * params.speckleRange,
                      buffer);
   }
-
-  int getMinDisparity() const { return params.minDisparity; }
-  void setMinDisparity(int minDisparity) { params.minDisparity = minDisparity; }
 
   int getNumDisparities() const { return params.numDisparities; }
   void setNumDisparities(int numDisparities) { params.numDisparities = numDisparities; }
@@ -580,7 +575,7 @@ class StereoSGBMImpl : public StereoSGBM {
   void setMode(int mode) { params.mode = mode; }
 
   void write(FileStorage& fs) const {
-    fs << "name" << name_ << "minDisparity" << params.minDisparity << "numDisparities"
+    fs << "name" << name_ << "numDisparities"
        << params.numDisparities << "blockSize" << params.SADWindowSize << "speckleWindowSize"
        << params.speckleWindowSize << "speckleRange" << params.speckleRange << "disp12MaxDiff"
        << params.disp12MaxDiff << "preFilterCap" << params.preFilterCap << "uniquenessRatio"
@@ -590,7 +585,6 @@ class StereoSGBMImpl : public StereoSGBM {
   void read(const FileNode& fn) {
     FileNode n = fn["name"];
     CV_Assert(n.isString() && String(n) == name_);
-    params.minDisparity = (int)fn["minDisparity"];
     params.numDisparities = (int)fn["numDisparities"];
     params.SADWindowSize = (int)fn["blockSize"];
     params.speckleWindowSize = (int)fn["speckleWindowSize"];
@@ -610,21 +604,21 @@ class StereoSGBMImpl : public StereoSGBM {
 
 const char* StereoSGBMImpl::name_ = "StereoMatcher.SGBM";
 
-Ptr<StereoSGBM> StereoSGBM::create(int minDisparity, int numDisparities, int SADWindowSize, int P1,
+Ptr<StereoSGBM> StereoSGBM::create(int numDisparities, int SADWindowSize, int P1,
                                    int P2, int disp12MaxDiff, int preFilterCap, int uniquenessRatio,
                                    int speckleWindowSize, int speckleRange, int mode) {
-  return Ptr<StereoSGBM>(new StereoSGBMImpl(minDisparity, numDisparities, SADWindowSize, P1, P2,
+  return Ptr<StereoSGBM>(new StereoSGBMImpl(numDisparities, SADWindowSize, P1, P2,
                                             disp12MaxDiff, preFilterCap, uniquenessRatio,
                                             speckleWindowSize, speckleRange, mode));
 }
 
-Rect getValidDisparityROI(Rect roi1, Rect roi2, int minDisparity, int numberOfDisparities,
+Rect getValidDisparityROI(Rect roi1, Rect roi2, int numberOfDisparities,
                           int SADWindowSize) {
   int SW2 = SADWindowSize / 2;
-  int minD = minDisparity, maxD = minDisparity + numberOfDisparities - 1;
+  int maxD = numberOfDisparities - 1;
 
   int xmin = std::max(roi1.x, roi2.x + maxD) + SW2;
-  int xmax = std::min(roi1.x + roi1.width, roi2.x + roi2.width - minD) - SW2;
+  int xmax = std::min(roi1.x + roi1.width, roi2.x + roi2.width) - SW2;
   int ymin = std::max(roi1.y, roi2.y) + SW2;
   int ymax = std::min(roi1.y + roi1.height, roi2.y + roi2.height) - SW2;
 
@@ -772,17 +766,17 @@ void cv::filterSpeckles(InputOutputArray _img, double _newval, int maxSpeckleSiz
     filterSpecklesImpl<short>(img, newVal, maxSpeckleSize, maxDiff, _buf);
 }
 
-void cv::validateDisparity(InputOutputArray _disp, InputArray _cost, int minDisparity,
+void cv::validateDisparity(InputOutputArray _disp, InputArray _cost,
                            int numberOfDisparities, int disp12MaxDiff) {
   Mat disp = _disp.getMat(), cost = _cost.getMat();
   int cols = disp.cols, rows = disp.rows;
-  int minD = minDisparity, maxD = minDisparity + numberOfDisparities;
-  int x, minX1 = std::max(maxD, 0), maxX1 = cols + std::min(minD, 0);
+  int maxD = numberOfDisparities;
+  int x, minX1 = std::max(maxD, 0), maxX1 = cols;
   AutoBuffer<int> _disp2buf(cols * 2);
   int* disp2buf = _disp2buf;
   int* disp2cost = disp2buf + cols;
   const int DISP_SHIFT = 4, DISP_SCALE = 1 << DISP_SHIFT;
-  int INVALID_DISP = minD - 1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
+  int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int costType = cost.type();
 
   disp12MaxDiff *= DISP_SCALE;
