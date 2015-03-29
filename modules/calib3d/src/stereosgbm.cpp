@@ -102,7 +102,7 @@ struct StereoSGBMParams {
 };
 
 /*
- For each pixel row1[x], max(-maxD, 0) <= minX <= x < maxX <= width,
+ For each pixel row1[x], 0 <= minX <= x < maxX <= width,
  and for each disparity 0<=d<maxD the function
  computes the cost (cost[(x-minX)*maxD + d]), depending on the difference between
  row1[x] and row2[x-d]. The subpixel algorithm from
@@ -114,8 +114,8 @@ struct StereoSGBMParams {
 static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
-  int minX1 = std::max(-maxD, 0), maxX1 = width;
-  int minX2 = std::max(minX1 - maxD, 0), maxX2 = std::min(maxX1, width);
+  int minX1 = 0, maxX1 = width;
+  int minX2 = 0, maxX2 = width;
   int D = maxD, width1 = maxX1 - minX1, width2 = maxX2 - minX2;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width2 * 2, * prow2 = prow1 + width * 2;
@@ -221,6 +221,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
          (int)MAX_COST);
 
   int maxD = params.numDisparities;
+  CV_Assert(maxD > 0);
   Size SADWindowSize;
   SADWindowSize.width = SADWindowSize.height = params.SADWindowSize > 0 ? params.SADWindowSize : 5;
   int ftzero = std::max(params.preFilterCap, 15) | 1;
@@ -228,7 +229,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
   int width = disp1.cols, height = disp1.rows;
-  int minX1 = std::max(-maxD, 0), maxX1 = width;
+  int minX1 = 0, maxX1 = width;
   int D = maxD, width1 = maxX1 - minX1;
   int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int SW2 = SADWindowSize.width / 2, SH2 = SADWindowSize.height / 2;
@@ -769,7 +770,7 @@ void cv::validateDisparity(InputOutputArray _disp, InputArray _cost, int numberO
   Mat disp = _disp.getMat(), cost = _cost.getMat();
   int cols = disp.cols, rows = disp.rows;
   int maxD = numberOfDisparities;
-  int x, minX1 = std::max(maxD, 0), maxX1 = cols;
+  int x, minX1 = maxD, maxX1 = cols;
   AutoBuffer<int> _disp2buf(cols * 2);
   int* disp2buf = _disp2buf;
   int* disp2cost = disp2buf + cols;
