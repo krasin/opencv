@@ -74,9 +74,9 @@ struct StereoSGBMParams {
     mode = StereoSGBM::MODE_SGBM;
   }
 
-  StereoSGBMParams(int _numDisparities, int _SADWindowSize, int _P1, int _P2,
-                   int _disp12MaxDiff, int _preFilterCap, int _uniquenessRatio,
-                   int _speckleWindowSize, int _speckleRange, int _mode) {
+  StereoSGBMParams(int _numDisparities, int _SADWindowSize, int _P1, int _P2, int _disp12MaxDiff,
+                   int _preFilterCap, int _uniquenessRatio, int _speckleWindowSize,
+                   int _speckleRange, int _mode) {
     numDisparities = _numDisparities;
     SADWindowSize = _SADWindowSize;
     P1 = _P1;
@@ -111,8 +111,8 @@ struct StereoSGBMParams {
 
  the temporary buffer should contain width2*2 elements
  */
-static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD,
-                            CostType* cost, PixType* buffer, const PixType* tab, int tabOfs, int) {
+static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, CostType* cost,
+                            PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
   int minX1 = std::max(-maxD, 0), maxX1 = width;
   int minX2 = std::max(minX1 - maxD, 0), maxX2 = std::min(maxX1, width);
@@ -520,12 +520,12 @@ class StereoSGBMImpl : public StereoSGBM {
  public:
   StereoSGBMImpl() { params = StereoSGBMParams(); }
 
-  StereoSGBMImpl(int _numDisparities, int _SADWindowSize, int _P1, int _P2,
-                 int _disp12MaxDiff, int _preFilterCap, int _uniquenessRatio,
-                 int _speckleWindowSize, int _speckleRange, int _mode) {
+  StereoSGBMImpl(int _numDisparities, int _SADWindowSize, int _P1, int _P2, int _disp12MaxDiff,
+                 int _preFilterCap, int _uniquenessRatio, int _speckleWindowSize, int _speckleRange,
+                 int _mode) {
     params =
-        StereoSGBMParams(_numDisparities, _SADWindowSize, _P1, _P2, _disp12MaxDiff,
-                         _preFilterCap, _uniquenessRatio, _speckleWindowSize, _speckleRange, _mode);
+        StereoSGBMParams(_numDisparities, _SADWindowSize, _P1, _P2, _disp12MaxDiff, _preFilterCap,
+                         _uniquenessRatio, _speckleWindowSize, _speckleRange, _mode);
   }
 
   void compute(InputArray leftarr, InputArray rightarr, OutputArray disparr) {
@@ -539,9 +539,8 @@ class StereoSGBMImpl : public StereoSGBM {
     medianBlur(disp, disp, 3);
 
     if (params.speckleWindowSize > 0)
-      filterSpeckles(disp, -StereoMatcher::DISP_SCALE,
-                     params.speckleWindowSize, StereoMatcher::DISP_SCALE * params.speckleRange,
-                     buffer);
+      filterSpeckles(disp, -StereoMatcher::DISP_SCALE, params.speckleWindowSize,
+                     StereoMatcher::DISP_SCALE * params.speckleRange, buffer);
   }
 
   int getNumDisparities() const { return params.numDisparities; }
@@ -575,11 +574,11 @@ class StereoSGBMImpl : public StereoSGBM {
   void setMode(int mode) { params.mode = mode; }
 
   void write(FileStorage& fs) const {
-    fs << "name" << name_ << "numDisparities"
-       << params.numDisparities << "blockSize" << params.SADWindowSize << "speckleWindowSize"
-       << params.speckleWindowSize << "speckleRange" << params.speckleRange << "disp12MaxDiff"
-       << params.disp12MaxDiff << "preFilterCap" << params.preFilterCap << "uniquenessRatio"
-       << params.uniquenessRatio << "P1" << params.P1 << "P2" << params.P2 << "mode" << params.mode;
+    fs << "name" << name_ << "numDisparities" << params.numDisparities << "blockSize"
+       << params.SADWindowSize << "speckleWindowSize" << params.speckleWindowSize << "speckleRange"
+       << params.speckleRange << "disp12MaxDiff" << params.disp12MaxDiff << "preFilterCap"
+       << params.preFilterCap << "uniquenessRatio" << params.uniquenessRatio << "P1" << params.P1
+       << "P2" << params.P2 << "mode" << params.mode;
   }
 
   void read(const FileNode& fn) {
@@ -604,16 +603,15 @@ class StereoSGBMImpl : public StereoSGBM {
 
 const char* StereoSGBMImpl::name_ = "StereoMatcher.SGBM";
 
-Ptr<StereoSGBM> StereoSGBM::create(int numDisparities, int SADWindowSize, int P1,
-                                   int P2, int disp12MaxDiff, int preFilterCap, int uniquenessRatio,
+Ptr<StereoSGBM> StereoSGBM::create(int numDisparities, int SADWindowSize, int P1, int P2,
+                                   int disp12MaxDiff, int preFilterCap, int uniquenessRatio,
                                    int speckleWindowSize, int speckleRange, int mode) {
-  return Ptr<StereoSGBM>(new StereoSGBMImpl(numDisparities, SADWindowSize, P1, P2,
-                                            disp12MaxDiff, preFilterCap, uniquenessRatio,
-                                            speckleWindowSize, speckleRange, mode));
+  return Ptr<StereoSGBM>(new StereoSGBMImpl(numDisparities, SADWindowSize, P1, P2, disp12MaxDiff,
+                                            preFilterCap, uniquenessRatio, speckleWindowSize,
+                                            speckleRange, mode));
 }
 
-Rect getValidDisparityROI(Rect roi1, Rect roi2, int numberOfDisparities,
-                          int SADWindowSize) {
+Rect getValidDisparityROI(Rect roi1, Rect roi2, int numberOfDisparities, int SADWindowSize) {
   int SW2 = SADWindowSize / 2;
   int maxD = numberOfDisparities - 1;
 
@@ -766,8 +764,8 @@ void cv::filterSpeckles(InputOutputArray _img, double _newval, int maxSpeckleSiz
     filterSpecklesImpl<short>(img, newVal, maxSpeckleSize, maxDiff, _buf);
 }
 
-void cv::validateDisparity(InputOutputArray _disp, InputArray _cost,
-                           int numberOfDisparities, int disp12MaxDiff) {
+void cv::validateDisparity(InputOutputArray _disp, InputArray _cost, int numberOfDisparities,
+                           int disp12MaxDiff) {
   Mat disp = _disp.getMat(), cost = _cost.getMat();
   int cols = disp.cols, rows = disp.rows;
   int maxD = numberOfDisparities;
