@@ -103,18 +103,17 @@ struct StereoSGBMParams {
 
 /*
  For each pixel row1[x], 0 <= x < width,
- and for each disparity 0<=d<maxD the function
- computes the cost (cost[x*maxD + d]), depending on the difference between
+ and for each disparity 0<=d<D the function
+ computes the cost (cost[x*D + d]), depending on the difference between
  row1[x] and row2[x-d]. The subpixel algorithm from
  "Depth Discontinuities by Pixel-to-Pixel Stereo" by Stan Birchfield and C. Tomasi
  is used, hence the suffix BT.
 
  the temporary buffer should contain width*2 elements
  */
-static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, CostType* cost,
+static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, CostType* cost,
                             PixType* buffer, const PixType* tab, int tabOfs, int) {
   int x, c, width = img1.cols;
-  int D = maxD;
   const PixType* row1 = img1.ptr<PixType>(y), * row2 = img2.ptr<PixType>(y);
   PixType* prow1 = buffer + width * 2, * prow2 = prow1 + width * 2;
 
@@ -168,7 +167,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
       u1 = std::max(u1, u);
 
       {
-        for (int d = 0; d < maxD; d++) {
+        for (int d = 0; d < D; d++) {
           int v = prow2[width - x - 1 + d];
           int v0 = buffer[width - x - 1 + d];
           int v1 = buffer[width - x - 1 + d + width];
@@ -187,7 +186,7 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int maxD, C
 /*
  computes disparity for "roi" in img1 w.r.t. img2 and write it to disp1buf.
  that is, disp1buf(x, y)=d means that img1(x+roi.x, y+roi.y) ~ img2(x+roi.x-d, y+roi.y).
- 0 <= d < maxD.
+ 0 <= d < D.
  disp2full is the reverse disparity map, that is:
  disp2full(x+roi.x,y+roi.y)=d means that img2(x+roi.x, y+roi.y) ~ img1(x+roi.x+d, y+roi.y)
 
@@ -215,8 +214,8 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   printf("ALIGN: %d, DISP_SHIFT: %d, DISP_SCALE: %d, MAX_COST: %d\n", ALIGN, DISP_SHIFT, DISP_SCALE,
          (int)MAX_COST);
 
-  int maxD = params.numDisparities;
-  CV_Assert(maxD > 0);
+  int D = params.numDisparities;
+  CV_Assert(D > 0);
   Size SADWindowSize;
   SADWindowSize.width = SADWindowSize.height = params.SADWindowSize > 0 ? params.SADWindowSize : 5;
   int ftzero = std::max(params.preFilterCap, 15) | 1;
@@ -224,7 +223,6 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
   int disp12MaxDiff = params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1;
   int P1 = params.P1 > 0 ? params.P1 : 2, P2 = std::max(params.P2 > 0 ? params.P2 : 5, P1 + 1);
   int width = disp1.cols, height = disp1.rows;
-  int D = maxD;
   int INVALID_DISP = -1, INVALID_DISP_SCALED = INVALID_DISP * DISP_SCALE;
   int SW2 = SADWindowSize.width / 2, SH2 = SADWindowSize.height / 2;
   const int TAB_OFS = 256 * 4, TAB_SIZE = 256 + TAB_OFS * 2;
@@ -304,7 +302,7 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
       CostType* hsumAdd = hsumBuf + (std::min(k, height - 1) % hsumBufNRows) * costBufSize;
 
       if (k < height) {
-        calcPixelCostBT(img1, img2, k, maxD, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
+        calcPixelCostBT(img1, img2, k, D, pixDiff, tempBuf, clipTab, TAB_OFS, ftzero);
 
         memset(hsumAdd, 0, D * sizeof(CostType));
         for (int x = 0; x <= SW2 * D; x += D) {
