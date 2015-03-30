@@ -171,11 +171,12 @@ static void calcPixelCostBT(const Mat& img1, const Mat& img2, int y, int D, Cost
         int v0 = buffer[width - x - 1 + d];
         int v1 = buffer[width - x - 1 + d + width];
         int c0 = std::max(0, u - v1);
-        c0 = std::max(c0, v0 - u); // max(0, u-v1, v0-u)
+        c0 = std::max(c0, v0 - u);  // max(0, u-v1, v0-u)
         int c1 = std::max(0, v - u1);
-        c1 = std::max(c1, u0 - v); // max(0, v-u1, u0-v)
+        c1 = std::max(c1, u0 - v);  // max(0, v-u1, u0-v)
 
-        cost[x * D + d] += (CostType)(std::min(c0, c1) >> diff_scale); // min(max(0, u-v1, v0-u),max(0,v-u1),max(u0-v))
+        cost[x * D + d] += (CostType)(std::min(c0, c1) >>
+                                      diff_scale);  // min(max(0, u-v1, v0-u),max(0,v-u1),max(u0-v))
       }
     }
   }
@@ -316,12 +317,9 @@ static void computeDisparitySGBM(const Mat& img1, const Mat& img2, Mat& disp1,
           for (int x = D; x < width * D; x += D) {
             const CostType* pixAdd = pixDiff + std::min(x + SW2 * D, (width - 1) * D);
             const CostType* pixSub = pixDiff + std::max(x - (SW2 + 1) * D, 0);
-
-            {
-              for (d = 0; d < D; d++) {
-                int hv = hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
-                C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
-              }
+            for (d = 0; d < D; d++) {
+              int hv = hsumAdd[x + d] = (CostType)(hsumAdd[x - D + d] + pixAdd[d] - pixSub[d]);
+              C[x + d] = (CostType)(Cprev[x + d] + hv - hsumSub[x + d]);
             }
           }
         } else {
